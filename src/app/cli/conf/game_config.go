@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/laper32/regsm-console/src/cli/conf/game"
+	"github.com/laper32/regsm-console/src/app/cli/conf/game"
 	"github.com/laper32/regsm-console/src/lib/conf"
 	"github.com/spf13/viper"
 )

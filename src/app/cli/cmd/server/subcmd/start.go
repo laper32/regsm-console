@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	cliconf "github.com/laper32/regsm-console/src/cli/conf"
-	"github.com/laper32/regsm-console/src/cli/dpkg"
+	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
+	"github.com/laper32/regsm-console/src/app/cli/dpkg"
 	"github.com/spf13/cobra"
 )
 

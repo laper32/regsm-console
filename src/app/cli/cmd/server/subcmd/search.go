@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/laper32/regsm-console/src/cli/dpkg"
+	"github.com/laper32/regsm-console/src/app/cli/dpkg"
 	"github.com/spf13/cobra"
 )
 

@@ -1,14 +1,14 @@
 package cmd
 
-// Note: The CMD command level reaches at most 3.
-
 import (
 	"fmt"
 
-	"github.com/laper32/regsm-console/src/cli/cmd/coordinator"
-	"github.com/laper32/regsm-console/src/cli/cmd/server"
+	"github.com/laper32/regsm-console/src/app/cli/cmd/coordinator"
+	"github.com/laper32/regsm-console/src/app/cli/cmd/server"
 	"github.com/spf13/cobra"
 )
+
+// Note: The CMD command level reaches at most 3.
 
 func initUpdateCMD() *cobra.Command {
 	var content string

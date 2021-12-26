@@ -1,7 +1,7 @@
 package server
 
 import (
-	"github.com/laper32/regsm-console/src/cli/cmd/server/subcmd"
+	"github.com/laper32/regsm-console/src/app/cli/cmd/server/subcmd"
 	"github.com/spf13/cobra"
 )
 

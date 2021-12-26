@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/laper32/regsm-console/src/coordinator/conf"
+	"github.com/laper32/regsm-console/src/app/coordinator/conf"
 	"github.com/laper32/regsm-console/src/lib/log"
 )
 

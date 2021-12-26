@@ -1,7 +1,7 @@
 package coordinator
 
 import (
-	"github.com/laper32/regsm-console/src/cli/cmd/coordinator/subcmd"
+	"github.com/laper32/regsm-console/src/app/cli/cmd/coordinator/subcmd"
 	"github.com/spf13/cobra"
 )
 

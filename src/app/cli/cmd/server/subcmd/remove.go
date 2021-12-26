@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/laper32/regsm-console/src/cli/dpkg"
+	"github.com/laper32/regsm-console/src/app/cli/dpkg"
 	"github.com/laper32/regsm-console/src/lib/os/path"
 	"github.com/laper32/regsm-console/src/lib/structs"
 	"github.com/spf13/cobra"

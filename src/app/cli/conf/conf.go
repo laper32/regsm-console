@@ -5,11 +5,11 @@ import (
 )
 
 type Config struct {
-	log *log.Config
+	Log *log.Config
 }
 
 func Init() *Config {
 	return &Config{
-		log: &log.Config{},
+		Log: &log.Config{},
 	}
 }
