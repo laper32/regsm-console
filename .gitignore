@@ -1,3 +1,6 @@
+# local distribute test ignore
+distribute/
+
 # idea ignore
 .idea/
 *.ipr
