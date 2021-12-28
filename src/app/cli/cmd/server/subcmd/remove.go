@@ -19,6 +19,15 @@ func InitRemoveCMD() *cobra.Command {
 	remove := &cobra.Command{
 		Use: "remove",
 		Run: func(cmd *cobra.Command, args []string) {
+			// Removing server, is to remove server files, and update server info config(or database).
+			// Basically, we won't keep anything. (But in my view, we should keep logging.)
+			//
+			// Steps:
+			// 	1. Before removing files, we need to let user to do further confirmations.
+			// 	2. Retrieve this server directories.
+			// 	3. Check which component we want to keep.
+			// 	4. Delete. Don't forget to exclude these components that asked to keep.
+
 			// The cobra, if no default value, will throw error, and not execute anything.
 			// Based on this, we dont have to do such thing
 

@@ -13,6 +13,16 @@ func InitBackupCMD() *cobra.Command {
 	backup := &cobra.Command{
 		Use: "backup",
 		Run: func(cmd *cobra.Command, args []string) {
+			// Backup servers is just simply copy and paste server related files.
+			// I think we should not say anything about it.
+			//
+			// Step:
+			// 	1. Get the server related directories.
+			// 	2. Copy and paste.
+			// btw, we should have 'restore' command to restore files in backup.
+			// but not this version.
+			// we do this in the future.
+
 			makeDirectory := func(serverID uint) (string, string, string) {
 				rootDirectory := os.Getenv("GSM_ROOT")
 				thisServerDirectory := fmt.Sprintf("%v/server/%v", rootDirectory, serverID)

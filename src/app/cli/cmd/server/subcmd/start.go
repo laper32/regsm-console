@@ -17,6 +17,31 @@ func InitStartCMD() *cobra.Command {
 	start := &cobra.Command{
 		Use: "start",
 		Run: func(cmd *cobra.Command, args []string) {
+			// 	Starting a server is a easy job, but the difficulty is that
+			// what should we do if we also want to interact the game server
+			// console.
+			// 	It is not an easy job, since the Windows do not have tmux,
+			// and we want to build a cross-platform project.
+			//
+			// 	Based on this, we need to redirect the game server's standard IO
+			// to somewhere, for example, websocket, and connect it to a public
+			// server, for we can manipulate this server remotely.
+			//
+			// Steps
+			// 	1. Check this server whether exists.
+			// 	2. Configure this game, do the final configuration.
+			// 	3. Check the executable's folder.
+			// 	4. Connect this server to the coordinator.
+			// In this term, we just state it as 'coonected'.
+			// Don't forget that we need also provide a standard IO
+			// by websocket.
+			// 	6. Start the server. Redirect the standard IO
+			// what have been established by websocket to this
+			// process.
+			// 	7. Now everything is OK. The server's state is 'OK'.
+			// Send the server's process ID, startup time, etc to the
+			// coordinator.
+			// 	8. Now everything is set, and the server is ready to go.
 
 			serverExist := func() bool {
 				for _, content := range dpkg.ServerInfoList {

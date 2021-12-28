@@ -23,6 +23,7 @@ func InitUpdateCMD() *cobra.Command {
 			// 	And we update this root server.
 			// 		(Noting that in this term all servers except root server with update related configs
 			// 		are all disabled.)
+			// 	3. Update. (In fact the remaining are quite similar to installation.)
 
 			thisServer := dpkg.FindServerInfoServer(serverID)
 			if thisServer == nil {

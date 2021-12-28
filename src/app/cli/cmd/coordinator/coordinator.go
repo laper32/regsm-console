@@ -6,6 +6,7 @@ import (
 )
 
 /*
+gsm coordinator restart
 gsm coordinator start
 gsm coordinator stop
 */

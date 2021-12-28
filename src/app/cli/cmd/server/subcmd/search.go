@@ -13,6 +13,25 @@ func InitSearchCMD() *cobra.Command {
 	search := &cobra.Command{
 		Use: "search",
 		Run: func(cmd *cobra.Command, args []string) {
+			// This idea comes from 'apt search'
+			//
+			// 	We want to search something, due to this is CLI, that we only
+			// allow to search {name, short}, otherwise are not provided.
+			// (It is not the CLI can do. If you want to do advanced search,
+			// you should use something like ElasticSearch instead of typing in CLI.....)
+			// 	It will search both 'name' and 'short', and return results accoring
+			// your text.
+			//
+			// 	Also, this is list search, that you can search based on the list
+			// of games what you want to find.
+			//
+			// Steps
+			// 	1. Retrieve all available games.
+			// 	2. Search by full name
+			// 	3. Search by short, according the previous result on step 2.
+			// 	Noting that if no 'short' then will return result directly.
+			// 	4. Return result.
+
 			// This part may use a high large scale of hardware IO
 			// Optimization required
 			// Migrate to NoSQL(eg: MongoDB) required

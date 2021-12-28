@@ -6,8 +6,9 @@ func InitRestartCMD() *cobra.Command {
 	restart := &cobra.Command{
 		Use: "restart",
 		Run: func(cmd *cobra.Command, args []string) {
-			// restart...
-			// yeah... stop and start...
+			// Just stop and start.
+			// Attention to the sequence!
+
 			InitStopCMD().Execute()
 			InitStartCMD().Execute()
 		},
