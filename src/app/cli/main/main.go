@@ -91,7 +91,7 @@ func initializeModule() {
 
 func initMisc() {
 	dpkg.InitAvailableGameData()
-	dpkg.InitServerInfo()
+	dpkg.InitServerIdentity()
 }
 
 func initAll() {

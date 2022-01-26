@@ -25,7 +25,7 @@ func InitUpdateCMD() *cobra.Command {
 			// 		are all disabled.)
 			// 	3. Update. (In fact the remaining are quite similar to installation.)
 
-			thisServer := dpkg.FindServerInfoServer(serverID)
+			thisServer := dpkg.FindIdentifiedServer(serverID)
 			if thisServer == nil {
 				fmt.Printf("ERROR: Cannot found server %v.\n", serverID)
 				return
@@ -84,8 +84,8 @@ func InitUpdateCMD() *cobra.Command {
 
 			// When this server is related to another server, all config field
 			// about updating are all disabled.
-			if thisServer.RelatedTo > -1 {
-				rootServer := dpkg.FindRootRelatedServer(thisServer.ID)
+			if thisServer.SymlinkServerID > 0 {
+				rootServer := dpkg.FindRootSymlinkServer(thisServer.ID)
 				if rootServer == nil {
 					fmt.Println("ERROR: we cannot found the root server.")
 					return

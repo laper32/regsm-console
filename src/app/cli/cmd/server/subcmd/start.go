@@ -44,7 +44,7 @@ func InitStartCMD() *cobra.Command {
 			// 	8. Now everything is set, and the server is ready to go.
 
 			serverExist := func() bool {
-				for _, content := range dpkg.ServerInfoList {
+				for _, content := range dpkg.ServerIdentityList {
 					if serverID == content.ID {
 						return true
 					}

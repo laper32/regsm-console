@@ -5,6 +5,7 @@ import (
 
 	"github.com/laper32/regsm-console/src/app/cli/cmd/coordinator"
 	"github.com/laper32/regsm-console/src/app/cli/cmd/server"
+	"github.com/laper32/regsm-console/src/app/cli/misc"
 	"github.com/spf13/cobra"
 )
 
@@ -47,5 +48,13 @@ func InitCMD() *cobra.Command {
 		server.InitCMD(),
 		initUpdateCMD(),
 	)
+	gsm.PersistentFlags().BoolVarP(&misc.Agree, "yes", "y", false, "Confirm.")
+	gsm.PersistentFlags().Lookup("yes").NoOptDefVal = "true"
+	gsm.PersistentFlags().MarkHidden("yes")
+
+	gsm.PersistentFlags().BoolVarP(&misc.Decline, "no", "n", false, "Decline.")
+	gsm.PersistentFlags().Lookup("no").NoOptDefVal = "true"
+	gsm.PersistentFlags().MarkHidden("no")
+
 	return gsm
 }

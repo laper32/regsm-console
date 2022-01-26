@@ -19,7 +19,7 @@ var (
 
 func InitAvailableGameData() {
 	cfg := conf.Load(&conf.Config{
-		Name: "available_games.json",
+		Name: "available_games",
 		Type: "json",
 		Path: []string{os.Getenv("GSM_ROOT") + "/config/gsm"},
 	})

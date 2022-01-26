@@ -32,11 +32,11 @@ func InitRemoveCMD() *cobra.Command {
 			// Based on this, we dont have to do such thing
 
 			deleteServer := func() {
-				for i, content := range dpkg.ServerInfoList {
+				for i, content := range dpkg.ServerIdentityList {
 					if content.ID == serverID {
 						fmt.Println("Trigger removal process.")
 						content.Deleted = true
-						dpkg.ServerInfoList[i] = content
+						dpkg.ServerIdentityList[i] = content
 					}
 				}
 
@@ -115,14 +115,14 @@ func InitRemoveCMD() *cobra.Command {
 				// 好tm蠢
 				// 要不是现在想不到什么太好的办法...
 				updateConfig := func() {
-					dpkg.ServerInfoMap = dpkg.ServerInfoMap[0:0]
-					for _, thisServer := range dpkg.ServerInfoList {
+					dpkg.ServerIdentityMap = dpkg.ServerIdentityMap[0:0]
+					for _, thisServer := range dpkg.ServerIdentityList {
 						thisMap, _ := structs.ToMap(thisServer, "map")
-						dpkg.ServerInfoMap = append(dpkg.ServerInfoMap, thisMap)
+						dpkg.ServerIdentityMap = append(dpkg.ServerIdentityMap, thisMap)
 					}
-					dpkg.ServerInfoConfig.Set("server_info", dpkg.ServerInfoMap)
+					dpkg.ServerIdentityConfig.Set("server_info", dpkg.ServerIdentityMap)
 
-					dpkg.ServerInfoConfig.WriteConfig()
+					dpkg.ServerIdentityConfig.WriteConfig()
 				}
 				updateConfig()
 

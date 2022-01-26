@@ -3,56 +3,47 @@ package subcmd
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strconv"
+	"time"
 
 	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
-	"github.com/laper32/regsm-console/src/lib/structs"
+	"github.com/laper32/regsm-console/src/app/cli/misc"
+	"github.com/laper32/regsm-console/src/lib/interact"
+	"github.com/laper32/regsm-console/src/lib/os/path"
+	"github.com/laper32/regsm-console/src/lib/os/shutil"
 	"github.com/spf13/cobra"
 )
 
+var NDEBUG bool = true
+
 func InitInstallCMD() *cobra.Command {
+	// gsm server install [--game] [--symlink --symlink-server-id] [--import --import-from-dir]
+
 	var (
 		game            string
-		importFromExist bool
-		importFromDir   string
-		relatedTo       int
+		isImport        bool
+		importDir       string
+		symlink         bool
+		symlinkServerID uint
 	)
 
 	install := &cobra.Command{
 		Use: "install",
 		Run: func(cmd *cobra.Command, args []string) {
-			// 	In order to install a new server, we need to make a basic identification, which
-			// has been shown above.
-			// 	Here, the process
-			// 		1. Check the game from the database, if found, then continue, otherwise interrupt.
-			// 	We don't have to check whether has been input something, because we have been marked it
-			// 	as required.
-			// 		2. Check whether the game is imported. If this game is imported, then we just
-			// 	copy and paste from the external directory.
-			// 	Noting that once this server is imported from outside, we cannot link it to any existed
-			// 	servers!
-			// 	Also, don't forget to check the directory whether exist!
-			// 		3. Once this server is related to an existing server, we just simply create a symbolic
-			// 	link of them.
-			// 	But keep in mind that if you want to 'link' a server, you need to link the 'root' server,
-			// 	despite this server you want to link with 'probably' that not the root server (thinking
-			// 	it as a linked list).
-			// 		Or, if this server not related to any game, you just need to install from a downloader,
-			// 	eg: steamcmd.
+			/*
+				1. Check symlink and import flag. Reject if both occur.
+				2. Process symlink case
+					2.1. Check symlink ID
+					2.2. Find the root server for symlink, if have.
+					2.3. Check whether deleted.
+					2.4.
+				3. Process import case
+				4. Process none of them case.
+			*/
 
-			if result := dpkg.FindGame(game); result == nil {
-				fmt.Println("ERROR: This game does not found in database: ", game)
-				return
-			}
-
-			if importFromExist {
-				if importFromDir == "" {
-					fmt.Println("ERROR: You must explicitly declare where to import the game!")
-					return
-				}
-			}
-
-			makeDirectory := func(serverID uint) (string, string, string) {
+			makeDirString := func(serverID uint) (string, string, string) {
 				rootDirectory := os.Getenv("GSM_ROOT")
 				thisServerDirectory := fmt.Sprintf("%v/server/%v", rootDirectory, serverID)
 				thisConfigDirectory := fmt.Sprintf("%v/config/server/%v", rootDirectory, serverID)
@@ -60,76 +51,76 @@ func InitInstallCMD() *cobra.Command {
 				return thisServerDirectory, thisConfigDirectory, thisLogDirectory
 			}
 
-			updateConfig := func() {
-				dpkg.ServerInfoMap = dpkg.ServerInfoMap[0:0]
-				for _, thisServer := range dpkg.ServerInfoList {
-					thisMap, _ := structs.ToMap(thisServer, "map")
-					dpkg.ServerInfoMap = append(dpkg.ServerInfoMap, thisMap)
+			// https://stackoverflow.com/questions/10303319/aligning-text-output-by-the-console
+			generateInstallationInfo := func(key, value []string) {
+				if len(key) != len(value) {
+					return
 				}
-				dpkg.ServerInfoConfig.Set("server_info", dpkg.ServerInfoMap)
-				dpkg.ServerInfoConfig.WriteConfig()
+				// Noting here:
+				// If we just let orderedKey=key
+				// This is the fact that in cpp:
+				// void* ptr_new = &ptr;
+				// and you should also know that if we modify ptr_new
+				// we will also modify *ptr, not satisfy our assumption.
+				// Based on this, we need to make its copy, then implement everything on it.
+				orderedKey := make([]string, len(key))
+				copy(orderedKey, key)
+				sort.Strings(orderedKey)
+
+				padWidth := len(orderedKey[len(orderedKey)-1]) + 10
+				for i := 0; i < len(key); i++ {
+					paddedString := fmt.Sprintf("%-"+strconv.Itoa(padWidth)+"v", key[i])
+					fmt.Println(paddedString + value[i])
+				}
 			}
 
-			var serverWrapper *dpkg.ServerInfo
-			if relatedTo > -1 {
-				// 	When we know thi server is related to an existing server, waow, very nice news to us. This
-				// means that we just need to create a simple symbolic link, rather than a planty of massive of
-				// shit.
-				// 	Based on this, we just need to do these steps:
-				// 	1. Check whether this server is imported from an existing server, if so, we should interrupt
-				// immediately.
-				// 	2. Check this related server, or in other words, parent server, whether exist.
-				// 	3. Check whether the game we want to install matches the parent server.
-				// 	4. Check server info, if we have deleted server, then use their ID, otherwise insert a new one.
-				// 	Don't forget generate directory for this server!
-				// 	5. Update config.
-
-				if importFromExist {
-					fmt.Println("ERROR: Your game server is related to an existing server, that you CANNOT enable 'import-from-exist'!")
-					return
-				}
-
-				// Check the related server whether exists
-				// In this term, the wrapper server ptr is this 'related to' server.
-				serverExist := func() bool {
-					for _, this := range dpkg.ServerInfoList {
-						if relatedTo == int(this.ID) {
-							serverWrapper = &this
-							return true
-						}
-					}
+			furtherActionNeeded := func() bool {
+				if misc.Agree && !misc.Decline {
 					return false
-				}()
-
-				if !serverExist {
-					fmt.Println("ERROR: The server what is related to does not exist.")
-					return
-				}
-
-				// To check this newly installed game is same as the related server game, avoid embrassment.
-				serverGameWhetherEqual := func() bool {
-					for _, this := range dpkg.ServerInfoList {
-						if game != this.Game {
-							return false
-						}
-					}
+				} else if !misc.Agree && misc.Decline {
+					return false
+				} else {
 					return true
-				}()
+				}
+			}
 
-				if !serverGameWhetherEqual {
-					fmt.Printf("ERROR: Game matching failed. Install game: %v, related server game: %v", game, serverWrapper.Game)
+			// Can't let them both occur
+			if symlink && isImport {
+				fmt.Println("Should only either \"--symlink\" or \"--import\"")
+				return
+			}
+
+			var thisServer *dpkg.ServerIdentity
+			if symlink {
+
+				// Check existance first.
+				symlinkServer := dpkg.FindIdentifiedServer(symlinkServerID)
+				if symlinkServer == nil {
+					fmt.Println("The server does not exist.")
 					return
 				}
 
-				rootServer := dpkg.FindRootRelatedServer(serverWrapper.ID)
+				// Indeed, the intermidiate server chain with possible deleted.
+				// But it does not affect the root result.
+				// Root server not deleted=everything is OK.
 
-				// The server ID input is the newly installed server ID
+				symlinkServer = dpkg.FindRootSymlinkServer(symlinkServer.ID)
+				if symlinkServer == nil {
+					fmt.Println("Unable to find the root server.")
+					return
+				}
+
+				if symlinkServer.Deleted {
+					fmt.Println("Can't create symlink for a deleted server.")
+					return
+				}
+
+				// The newly installed server distributed files folder string.
 				generateServerDirectory := func(serverID uint) {
-					// The newly installed server distributed files folder string.
-					thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirectory(serverID)
 
+					thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
 					// Root server dir.
-					rootServerDirectory, _, _ := makeDirectory(rootServer.ID)
+					rootServerDirectory, _, _ := makeDirString(symlinkServer.ID)
 
 					// 	If you want to implement error, you will get this massive of shit.
 					// Or just os.Mkdir, balabala.
@@ -145,7 +136,141 @@ func InitInstallCMD() *cobra.Command {
 						fmt.Println("ERROR:", err)
 						return
 					}
+
+					fmt.Printf("Creating symbolic link...")
 					err = os.Symlink(rootServerDirectory, thisServerDirectory)
+					if err != nil {
+						fmt.Println("ERROR:", err)
+						return
+					}
+					fmt.Println("OK")
+
+					err = os.Mkdir(thisConfigDirectory, os.ModePerm)
+					if err != nil {
+						fmt.Println("ERROR:", err)
+						return
+					}
+				}
+
+				// Check the info of reuse id
+				// If we have found the id reuse, then we will modify the wrapper to this deleted server.
+				canReuseID := func() bool {
+					for i, this := range dpkg.ServerIdentityList {
+						if this.Deleted {
+							this.Deleted = false
+							this.Game = symlinkServer.Game
+							this.SymlinkServerID = symlinkServerID
+							dpkg.ServerIdentityList[i] = this
+							thisServer = &this
+							return true
+						}
+					}
+					return false
+				}()
+
+				pushNewServer := func() {
+					thisServer = &dpkg.ServerIdentity{
+						ID:              uint(len(dpkg.ServerIdentityList)) + 1,
+						Game:            symlinkServer.Game,
+						Deleted:         false,
+						SymlinkServerID: symlinkServerID,
+					}
+					dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
+				}
+
+				if !misc.Agree && misc.Decline {
+					return
+				}
+
+				symlinkServerDir, _, _ := makeDirString(thisServer.SymlinkServerID)
+				serverDir, configDir, logDir := makeDirString(thisServer.ID)
+				fmt.Println("Installation information")
+				_key := []string{
+					"Server ID:",
+					"Game:",
+					"Symbolic server ID:",
+					"Symbolic server path:",
+					"Server path:",
+					"Server config path:",
+					"Server logging path:",
+				}
+
+				_value := []string{
+					fmt.Sprintf("%v", thisServer.ID),
+					dpkg.FindGame(thisServer.Game).Name,
+					fmt.Sprintf("%v", thisServer.SymlinkServerID),
+					symlinkServerDir,
+					serverDir,
+					configDir,
+					logDir,
+				}
+
+				generateInstallationInfo(_key, _value)
+
+				if furtherActionNeeded() {
+					fmt.Println("You are now going to proceed this installation.")
+					result := interact.MakeConfirmation("Proceed?")
+					if !result {
+						return
+					}
+				}
+
+				// We need to check symlink dir whether exists...
+
+				if !NDEBUG {
+					if path.Exist(symlinkServerDir) {
+						start := time.Now()
+						if canReuseID {
+							dpkg.UpdateServerIdentity()
+						} else {
+							pushNewServer()
+							dpkg.UpdateServerIdentity()
+						}
+						fmt.Println("Generating server directories...")
+						generateServerDirectory(thisServer.SymlinkServerID)
+						fmt.Println("OK")
+
+						fmt.Printf("Writing default configuration...")
+						cliconf.WriteDefaultGameConfig(thisServer.Game, configDir)
+						fmt.Println("OK")
+
+						elapsed := time.Since(start)
+						fmt.Println("Installation complete. Time elapsed: ", elapsed)
+					} else {
+						fmt.Println("Unexpected error occured: symlink server dir has been deleted!")
+						return
+					}
+				}
+				return
+			}
+
+			if isImport {
+				// Always 0
+				symlinkServerID = 0
+
+				if len(importDir) == 0 {
+					fmt.Println("Must explicitly declare the import directory.")
+					return
+				}
+
+				if !path.Exist(importDir) {
+					fmt.Println("Directory not found: \"", importDir, "\"")
+					return
+				}
+
+				if result := dpkg.FindGame(game); result == nil {
+					fmt.Println("ERROR: Can't find the game!")
+					return
+				}
+
+				generateServerDirectory := func(serverID uint) {
+					thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
+					err := os.Mkdir(thisLogDirectory, os.ModePerm)
+					if err != nil {
+						fmt.Println("ERROR:", err)
+						return
+					}
+					err = os.Mkdir(thisServerDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
@@ -159,65 +284,14 @@ func InitInstallCMD() *cobra.Command {
 
 				// Check the info of reuse id
 				// If we have found the id reuse, then we will modify the wrapper to this deleted server.
-				hasReuseID := func() bool {
-					for i, this := range dpkg.ServerInfoList {
+				canReuseID := func() bool {
+					for i, this := range dpkg.ServerIdentityList {
 						if this.Deleted {
 							this.Deleted = false
-							dpkg.ServerInfoList[i] = this
-							serverWrapper = &this
-							generateServerDirectory(this.ID)
-							return true
-						}
-					}
-					return false
-				}()
-
-				// Copy, paste and modify of code below
-				// Because the case is slightly different
-
-				pushNewServer := func() {
-					thisServer := &dpkg.ServerInfo{
-						ID:        uint(len(dpkg.ServerInfoList)) + 1,
-						Game:      game,
-						Deleted:   false,
-						RelatedTo: relatedTo,
-					}
-					generateServerDirectory(thisServer.ID)
-					dpkg.ServerInfoList = append(dpkg.ServerInfoList, *thisServer)
-				}
-
-				if hasReuseID {
-					updateConfig()
-				} else {
-					pushNewServer()
-					updateConfig()
-				}
-			} else {
-
-				// Step
-				// 	1. Read configuration file, to check installed server.
-				// 	2. Identify deleted server.
-				// 		2.1. If, we have found an index of server what have been deleted, then
-				// 		we relocate this index to this newly-installed server.
-				// 		2.2 Otherwise, we increment the index.
-				// 	3. Generate server folder, config folder, and log folder.
-
-				generateServerDirectory := func(serverID uint) {
-					thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirectory(serverID)
-					os.Mkdir(thisServerDirectory, os.ModePerm)
-					os.Mkdir(thisConfigDirectory, os.ModePerm)
-					os.Mkdir(thisLogDirectory, os.ModePerm)
-				}
-
-				// This forloop is aiming to re-use all deleted server.
-
-				hasReuseID := func() bool {
-					for i, content := range dpkg.ServerInfoList {
-						if content.Deleted {
-							content.Deleted = false
-							dpkg.ServerInfoList[i] = content
-							serverWrapper = &content
-							generateServerDirectory(content.ID)
+							this.Game = game
+							this.SymlinkServerID = symlinkServerID
+							dpkg.ServerIdentityList[i] = this
+							thisServer = &this
 							return true
 						}
 					}
@@ -225,73 +299,230 @@ func InitInstallCMD() *cobra.Command {
 				}()
 
 				pushNewServer := func() {
-					thisServer := &dpkg.ServerInfo{
-						ID:        uint(len(dpkg.ServerInfoList)) + 1,
-						Game:      game,
-						Deleted:   false,
-						RelatedTo: relatedTo,
+					thisServer = &dpkg.ServerIdentity{
+						ID:              uint(len(dpkg.ServerIdentityList)) + 1,
+						Game:            game,
+						Deleted:         false,
+						SymlinkServerID: symlinkServerID,
 					}
-					generateServerDirectory(thisServer.ID)
-					serverWrapper = thisServer
-					dpkg.ServerInfoList = append(dpkg.ServerInfoList, *thisServer)
+					dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 				}
 
-				if hasReuseID {
-					updateConfig()
+				if !misc.Agree && misc.Decline {
+					return
+				}
+
+				serverDir, configDir, logDir := makeDirString(thisServer.ID)
+				fmt.Println("Installation information")
+				_key := []string{
+					"Server ID:",
+					"Game:",
+					"External server package directory:",
+					"Server path:",
+					"Server config path:",
+					"Server logging path:",
+				}
+
+				_value := []string{
+					fmt.Sprintf("%v", thisServer.ID),
+					dpkg.FindGame(thisServer.Game).Name,
+					importDir,
+					serverDir,
+					configDir,
+					logDir,
+				}
+
+				generateInstallationInfo(_key, _value)
+
+				if furtherActionNeeded() {
+					fmt.Println("You are now going to proceed this installation.")
+					result := interact.MakeConfirmation("Proceed?")
+					if !result {
+						return
+					}
+				}
+
+				if !NDEBUG {
+					start := time.Now()
+					if canReuseID {
+						dpkg.UpdateServerIdentity()
+					} else {
+						pushNewServer()
+						dpkg.UpdateServerIdentity()
+					}
+
+					fmt.Printf("Generating server directories...")
+					generateServerDirectory(thisServer.ID)
+					fmt.Println("OK")
+
+					fmt.Printf("Copying files...")
+					shutil.CopyDir(importDir, serverDir)
+					fmt.Println("OK")
+
+					fmt.Printf("Writing default configurations...")
+					cliconf.WriteDefaultGameConfig(game, configDir)
+					fmt.Println("OK")
+
+					elapsed := time.Since(start)
+					fmt.Println("Installation complete. Time elapsed: ", elapsed)
+				}
+				return
+			}
+
+			// Newly installed server, we set 0 to avoid mistyping
+			symlinkServerID = 0
+
+			if len(game) == 0 {
+				fmt.Println("Explicit declare a game first.")
+				return
+			}
+			result := dpkg.FindGame(game)
+			if result == nil {
+				fmt.Println("Unable to find the game.")
+				return
+			}
+
+			generateServerDirectory := func(serverID uint) {
+				thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
+				err := os.Mkdir(thisLogDirectory, os.ModePerm)
+				if err != nil {
+					fmt.Println("ERROR:", err)
+					return
+				}
+				err = os.Mkdir(thisServerDirectory, os.ModePerm)
+				if err != nil {
+					fmt.Println("ERROR:", err)
+					return
+				}
+				err = os.Mkdir(thisConfigDirectory, os.ModePerm)
+				if err != nil {
+					fmt.Println("ERROR:", err)
+					return
+				}
+			}
+
+			// Check the info of reuse id
+			// If we have found the id reuse, then we will modify the wrapper to this deleted server.
+			canReuseID := func() bool {
+				for i, this := range dpkg.ServerIdentityList {
+					if this.Deleted {
+						this.Deleted = false
+						this.Game = game
+						this.SymlinkServerID = symlinkServerID
+						dpkg.ServerIdentityList[i] = this
+						thisServer = &this
+						return true
+					}
+				}
+				return false
+			}()
+
+			pushNewServer := func() {
+				thisServer = &dpkg.ServerIdentity{
+					ID:              uint(len(dpkg.ServerIdentityList)) + 1,
+					Game:            game,
+					Deleted:         false,
+					SymlinkServerID: symlinkServerID,
+				}
+				dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
+			}
+
+			if !misc.Agree && misc.Decline {
+				return
+			}
+
+			serverDir, configDir, logDir := makeDirString(thisServer.ID)
+			fmt.Println("Installation information")
+			_key := []string{
+				"Server ID:",
+				"Game:",
+				"Server path:",
+				"Server config path:",
+				"Server logging path:",
+			}
+
+			_value := []string{
+				fmt.Sprintf("%v", thisServer.ID),
+				dpkg.FindGame(thisServer.Game).Name,
+				serverDir,
+				configDir,
+				logDir,
+			}
+
+			generateInstallationInfo(_key, _value)
+
+			if furtherActionNeeded() {
+				fmt.Println("You are now going to proceed this installation.")
+				result := interact.MakeConfirmation("Proceed?")
+				if !result {
+					return
+				}
+			}
+
+			if !NDEBUG {
+				start := time.Now()
+				if canReuseID {
+					dpkg.UpdateServerIdentity()
 				} else {
 					pushNewServer()
-					updateConfig()
+					dpkg.UpdateServerIdentity()
 				}
 
-				thisServerDirectory, thisConfigDirectory, _ := makeDirectory(serverWrapper.ID)
-				fmt.Println(thisServerDirectory)
-				cliconf.WriteDefaultGameConfig(serverWrapper.Game, thisConfigDirectory)
+				fmt.Printf("Generating server directories...")
+				generateServerDirectory(thisServer.ID)
+				fmt.Println("OK")
 
-				// Then, check the installation requirement, and install.
-				execute := func() {
-					gameData := dpkg.FindGame(game)
-					if gameData != nil {
-						// Trust me, this part will become a massive of shit.
-						installVia := gameData.Specific["install_via"]
-						if installVia == "steamcmd" {
-							appid, modName, custom := int64(gameData.Specific["appid"].(float64)), "", ""
+				executeInstallation := func() {
+					installVia := result.Specific["install_via"]
+					if installVia == "steamcmd" {
+						appid, modName, custom := int64(result.Specific["appid"].(float64)), "", ""
 
-							if value, ok := gameData.Specific["mod"].(string); ok {
-								modName = value
-							}
-
-							if value, ok := gameData.Specific["custom"]; ok {
-								custom = value.(string)
-							}
-
-							var platformList []string
-							for _, this := range gameData.Specific["platform"].([]interface{}) {
-								platformList = append(platformList, this.(string))
-							}
-							fmt.Println(appid, modName, custom)
-
-							dpkg.SteamCMDInstall(platformList, thisServerDirectory, appid, modName, true, custom)
-
-							return
+						if value, ok := result.Specific["mod"].(string); ok {
+							modName = value
 						}
+
+						if value, ok := result.Specific["custom"]; ok {
+							custom = value.(string)
+						}
+
+						var platformList []string
+						for _, this := range result.Specific["platform"].([]interface{}) {
+							platformList = append(platformList, this.(string))
+						}
+						fmt.Println(appid, modName, custom)
+
+						dpkg.SteamCMDInstall(platformList, serverDir, appid, modName, true, custom)
+						return
 					}
 				}
-				execute()
+
+				fmt.Println("Installing server...")
+				executeInstallation()
+				fmt.Println("OK")
+
+				fmt.Printf("Writing default configurations...")
+				cliconf.WriteDefaultGameConfig(game, configDir)
+				fmt.Println("OK")
+
+				elapsed := time.Since(start)
+				fmt.Println("Installation complete. Time elapsed: ", elapsed)
 			}
 		},
 	}
+	install.Flags().StringVar(&game, "game", "", "Game to install. Must explicitly declared unless \"--symlink\" is set.")
+	install.Flags().Lookup("game").NoOptDefVal = ""
 
-	install.Flags().StringVar(&game, "game", "", "Game to install")
-	install.MarkFlagRequired("game")
+	install.Flags().BoolVar(&isImport, "import", false, "Determine whether this installation is import.")
+	install.Flags().Lookup("import").NoOptDefVal = "true"
 
-	install.Flags().BoolVar(&importFromExist, "import-from-exist", false, "Install server from an existed local server package")
-	install.Flags().Lookup("import-from-exist").NoOptDefVal = "false"
+	install.Flags().StringVar(&importDir, "import-dir", "", "The directory of external package.")
+	install.Flags().Lookup("import-dir").NoOptDefVal = ""
 
-	install.Flags().StringVar(&importFromDir, "import-from-dir", "", "Where to import")
-	install.Flags().Lookup("import-from-dir").NoOptDefVal = ""
+	install.Flags().BoolVar(&symlink, "symlink", false, "Determine whether this game is symlink.")
+	install.Flags().Lookup("symlink").NoOptDefVal = "true"
 
-	install.Flags().IntVar(&relatedTo, "related-to", -1, "Related to")
-	install.Flags().Lookup("related-to").NoOptDefVal = "-1"
+	install.Flags().UintVar(&symlinkServerID, "symlink-server-id", 0, "Symbolic link server id.")
+	install.Flags().Lookup("symlink-server-id").NoOptDefVal = "0"
 
 	return install
 }
