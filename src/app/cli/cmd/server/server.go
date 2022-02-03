@@ -11,10 +11,11 @@ func InitCMD() *cobra.Command {
 	}
 	server.AddCommand(
 		subcmd.InitBackupCMD(),
-		subcmd.InitConsoleCMD(),
+		subcmd.InitAttachCMD(),
 		subcmd.InitInstallCMD(),
 		subcmd.InitRemoveCMD(),
 		subcmd.InitRestartCMD(),
+		subcmd.InitSendCMD(),
 		subcmd.InitStartCMD(),
 		subcmd.InitStopCMD(),
 		subcmd.InitUpdateCMD(),

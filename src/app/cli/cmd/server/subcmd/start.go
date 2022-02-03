@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
+	"github.com/laper32/regsm-console/src/app/cli/cmd/server/subcmd/sysprocattr"
 	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
 	"github.com/spf13/cobra"
@@ -17,53 +19,74 @@ func InitStartCMD() *cobra.Command {
 	start := &cobra.Command{
 		Use: "start",
 		Run: func(cmd *cobra.Command, args []string) {
-			// 	Starting a server is a easy job, but the difficulty is that
-			// what should we do if we also want to interact the game server
-			// console.
-			// 	It is not an easy job, since the Windows do not have tmux,
-			// and we want to build a cross-platform project.
+			// 		Starting server can be done through a daemon.
+			// 		The key concept is that we need to interact console, in other words,
+			// we need to use system API, eg: On windows, we need to use PostMessage to
+			// send message to the server console, and also we need to retrieve its output.
+			// Since we **MUST** retrieve the true windows handle, it is very hard
+			// to solve with just only go language (Even they do not provide a suitable
+			// OS related package...).
+			// 		Based on this, and also, this is just a CLI, we just need to send some
+			// information to daemon, then everything leave to it to resolve.
+			// 		Now, to solve this problem, we use C# to do the job: It provide
+			// a very great method for us to interact with system API, and we don't have
+			// to take too much care about it ----- At least on Windows.
+			// 		Based on this, if we need to support Linux, I think C# could also help
+			// us to do the job well.
 			//
-			// 	Based on this, we need to redirect the game server's standard IO
-			// to somewhere, for example, websocket, and connect it to a public
-			// server, for we can manipulate this server remotely.
-			//
-			// Steps
-			// 	1. Check this server whether exists.
-			// 	2. Configure this game, do the final configuration.
-			// 	3. Check the executable's folder.
-			// 	4. Connect this server to the coordinator.
-			// In this term, we just state it as 'coonected'.
-			// Don't forget that we need also provide a standard IO
-			// by websocket.
-			// 	6. Start the server. Redirect the standard IO
-			// what have been established by websocket to this
-			// process.
-			// 	7. Now everything is OK. The server's state is 'OK'.
-			// Send the server's process ID, startup time, etc to the
-			// coordinator.
-			// 	8. Now everything is set, and the server is ready to go.
+			// Now, according to the info above, procedures:
+			// 		1. Check server whether exist.
+			// 		2. Make final startup configuration.
+			// 		3. Obtain the executable directory.
+			// 	Noting that different game could have different executable files.
+			// 	Currently we just write an inline override function to modify it.
+			// 	Considering write the executable file path to the config file.
+			// 		4. Locate the executable file.
+			//	We need to locate the true executable file, since different game
+			// will place their final exectuable file by their own method.
+			// Considering write this to the config file.
+			// 		5. Write JSON string, identify method to let daemon know
+			// what we are doing, and write the information what we stated above.
+			// 		6. Create a subprocess (and detach) (In golang we should call it goroutine).
+			// 			6.1. We need to notify the coordinator that this server is starting.
+			//			6.2. We startup the daemon, and let the daemon to startup the final
+			// 		server application.
+
+			var thisServer *dpkg.ServerIdentity
 
 			serverExist := func() bool {
 				for _, content := range dpkg.ServerIdentityList {
 					if serverID == content.ID {
-						return true
+						// We also need to make sure that this server is still existing...
+						if !content.Deleted {
+							thisServer = &content
+							return true
+						} else {
+							return false
+						}
 					}
 				}
 				return false
 			}()
+
 			if !serverExist {
 				fmt.Println("ERROR: The server does not exist.")
 				return
 			}
 
 			// We export server.param for passing in 'Args' when we executing commands.
-			cfg := cliconf.StartupConfiguration(serverID)
+			cfg, err := cliconf.StartGameConfiguration(thisServer)
+
+			if err != nil {
+				fmt.Println("ERROR:", err)
+				return
+			}
 
 			// By default, the executable file is under ${GSM_ROOT}/server/${ServerIndex}
 			// Some of them may be under ${GSM_ROOT}/server/${ServerIndex}/bin, or whatever
 			// If this case occured, will override via 'overrideServerExecutablePath'
 
-			serverExecutableDir := fmt.Sprintf("%v/server/%v", os.Getenv("GSM_ROOT"), serverID)
+			serverExecutableDir := fmt.Sprintf("%v/server/%v", os.Getenv("GSM_ROOT"), thisServer.ID)
 
 			overrideServerExecutablePath := func() {
 
@@ -84,19 +107,56 @@ func InitStartCMD() *cobra.Command {
 
 			// We need to pass parameters to gsm-server
 			// That for convience, we send params via JSON
+			// Leave everything to gsm-server to handle.
+			// In this term, our task is completed.
 			type Application struct {
-				ID         uint     `json:"server_id"`
-				Dir        string   `json:"dir"`
-				Executable string   `json:"executable"`
-				Args       []string `json:"args"`
+				ID         uint   `json:"server_id"`
+				Dir        string `json:"dir"`
+				Executable string `json:"executable"`
+				Args       string `json:"args"`
 			}
-			app := &Application{
-				ID:         serverID,
+			data := make(map[string]interface{})
+			data["application"] = &Application{
+				ID:         thisServer.ID,
 				Dir:        serverExecutableDir,
 				Executable: serverExecutablePath,
-				Args:       cfg.GetStringSlice("server.param"),
+				Args:       strings.Join(cfg.GetStringSlice("server.param"), " "),
 			}
-			ret, err := json.Marshal(app)
+
+			type CoordinatorPolicy struct {
+				RetryCount                uint `json:"retry_count"`
+				AllowRetryAtStartup       bool `json:"allow_retry_at_startup"`
+				AllowReconnectWhenRunning bool `json:"allow_reconnect_when_running"`
+			}
+
+			type Coordinator struct {
+				IP     string             `json:"ip"`
+				Port   uint               `json:"port"`
+				Policy *CoordinatorPolicy `json:"policy"`
+			}
+
+			coordinator_cfg, err := cliconf.CoordinatorConfiguration()
+
+			if err != nil {
+				fmt.Println("ERROR:", err)
+				return
+			}
+
+			data["coordinator"] = &Coordinator{
+				IP:   coordinator_cfg.GetString("coordinator.ip"),
+				Port: coordinator_cfg.GetUint("coordinator.port"),
+				Policy: &CoordinatorPolicy{
+					RetryCount:                cfg.GetUint("coordinator.retry_count"),
+					AllowRetryAtStartup:       cfg.GetBool("coordinator.allow_retry_at_startup"),
+					AllowReconnectWhenRunning: cfg.GetBool("coordinator.allow_reconnect_when_running"),
+				},
+			}
+
+			msg := make(map[string]interface{})
+			msg["command"] = "start"
+			msg["message"] = data
+
+			ret, err := json.Marshal(msg)
 			if err != nil {
 				fmt.Println("ERROR:", err)
 				return
@@ -112,18 +172,42 @@ func InitStartCMD() *cobra.Command {
 				return
 			}
 			wrapperEXE := &exec.Cmd{
-				Path:   wrapperEXEPath,
-				Dir:    os.Getenv("GSM_ROOT") + "/bin",
-				Args:   []string{wrapperEXEPath, string(ret)},
-				Stdin:  os.Stdin,
-				Stdout: os.Stdout,
-				Stderr: os.Stderr,
+				Path:        wrapperEXEPath,
+				Dir:         os.Getenv("GSM_ROOT") + "/bin",
+				Args:        []string{wrapperEXEPath, string(ret)},
+				SysProcAttr: sysprocattr.SysProcAttr(),
+				Env:         os.Environ(),
+				Stdin:       os.Stdin,
+				Stdout:      os.Stdout,
+				Stderr:      os.Stderr,
 			}
-			err = wrapperEXE.Start()
+			err = wrapperEXE.Run()
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println("ERROR:", err)
 				return
 			}
+
+			// That's why we want to build a coordinator....
+			// We need a method to see all information...
+			start := make(chan bool)
+			go func() {
+				wrapperEXE := &exec.Cmd{
+					Path:        wrapperEXEPath,
+					Dir:         os.Getenv("GSM_ROOT") + "/bin",
+					Args:        []string{wrapperEXEPath, string(ret)},
+					SysProcAttr: sysprocattr.SysProcAttr(),
+				}
+				// TODO: Notify the server that this server is starting.
+				err = wrapperEXE.Start()
+				if err != nil {
+					fmt.Println("ERROR:", err)
+					start <- false
+					return
+				}
+				start <- true
+			}()
+			// <-start
+
 		},
 	}
 	start.Flags().UintVar(&serverID, "server-id", 0, "Server ID to start")

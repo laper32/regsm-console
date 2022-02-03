@@ -3,15 +3,16 @@ package game
 import (
 	"fmt"
 
+	"github.com/laper32/regsm-console/src/lib/conf"
 	"github.com/spf13/viper"
 )
 
-func CSGODefaultConfig(cfg *viper.Viper) {
-	cfg.Set("server.special.gslt", "")
-	cfg.Set("server.special.default_map", "")
+func CSGOConfigField(cfg *viper.Viper) {
+	conf.TestOrInsert(cfg, "server.special.gslt", "")
+	conf.TestOrInsert(cfg, "server.special.default_map", "")
 	// We only provides default config
 	// You should make further configruation by yourself, rather than us.
-	cfg.Set("server.param", []string{
+	conf.TestOrInsert(cfg, "server.param", []string{
 		"-console", "-game csgo", "+game_type 0", "+game_mode 0",
 		"+mapgroup mg_active", "-tickrate 64", "-usercon",
 	})

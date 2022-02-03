@@ -27,6 +27,17 @@ func InitStopCMD() *cobra.Command {
 			// closed.
 			// 	Also, provide this process's exit code to the coordinator is required.
 			// 	4. Pop this server out of online servers list.
+
+			// coordinatorCFG := conf.Load(
+			// 	&conf.Config{
+			// 		Type: "toml",
+			// 		Name: "coordinator",
+			// 		Path: []string{fmt.Sprintf("%v/config/gsm", os.Getenv("GSM_ROOT"))},
+			// 	})
+
+			// port := coordinatorCFG.Get("coordinator.port")
+			// ip := coordinatorCFG.Get("coordinator.ip")
+
 		},
 	}
 	stop.Flags().UintVar(&serverID, "server-id", 0, "")

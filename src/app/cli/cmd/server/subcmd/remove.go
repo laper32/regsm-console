@@ -1,21 +1,22 @@
 package subcmd
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
+	"github.com/laper32/regsm-console/src/app/cli/misc"
+	"github.com/laper32/regsm-console/src/lib/interact"
 	"github.com/laper32/regsm-console/src/lib/os/path"
 	"github.com/laper32/regsm-console/src/lib/structs"
 	"github.com/spf13/cobra"
 )
 
 func InitRemoveCMD() *cobra.Command {
-	var serverID uint
-	var componentKeep []string
-	var confirm bool
+	var (
+		serverID      uint
+		componentKeep []string
+	)
 	remove := &cobra.Command{
 		Use: "remove",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -82,52 +83,48 @@ func InitRemoveCMD() *cobra.Command {
 				}
 			}
 
-			makeConfirmation := func() {
-				if !confirm {
-					fmt.Println("WARNING: You are now removing a server!")
-					fmt.Printf("The server(ID=%v)'s file will be deleted permanently, but these components listed below will be kept: %v\n", serverID, componentKeep)
-
-					// TODO: When we input something like 'CTRL+C', 'CTRL+Z', etc, this will not behave expectly...
-					// Perhaps we need to make detiled implementation.
-					reader := bufio.NewScanner(os.Stdin)
-					for {
-						fmt.Printf("Are you really sure you want to remove this server? [Y/N] (case insensitively): ")
-						reader.Scan()
-						text := reader.Text()
-						if strings.ToLower(text) == "y" {
-							confirm = true
-							break
-						} else if strings.ToLower(text) == "n" {
-							confirm = false
-							break
-						} else {
-							fmt.Println("Unknown input. Your answer must either Y or N, which is case insensitively.")
-						}
-					}
+			if !misc.Agree && misc.Decline {
+				return
+			}
+			furtherActionNeeded := func() bool {
+				if misc.Agree && !misc.Decline {
+					return false
+				} else if !misc.Agree && misc.Decline {
+					return false
+				} else {
+					return true
 				}
 			}
 
-			makeConfirmation()
+			fmt.Println("You want to keep following components: ", componentKeep)
+			fmt.Println("Otherwise will be removed.")
 
-			if confirm {
-				deleteServer()
-
-				// 好tm蠢
-				// 要不是现在想不到什么太好的办法...
-				updateConfig := func() {
-					dpkg.ServerIdentityMap = dpkg.ServerIdentityMap[0:0]
-					for _, thisServer := range dpkg.ServerIdentityList {
-						thisMap, _ := structs.ToMap(thisServer, "map")
-						dpkg.ServerIdentityMap = append(dpkg.ServerIdentityMap, thisMap)
-					}
-					dpkg.ServerIdentityConfig.Set("server_info", dpkg.ServerIdentityMap)
-
-					dpkg.ServerIdentityConfig.WriteConfig()
+			if furtherActionNeeded() {
+				fmt.Println("You will going to proceed the removal.")
+				result := interact.MakeConfirmation("Proceed?")
+				if !result {
+					return
 				}
-				updateConfig()
-
-				fmt.Printf("server ID: %v has been removed. Component kept: %v. Otherwise are removed.\n", serverID, componentKeep)
 			}
+
+			deleteServer()
+
+			// 好tm蠢
+			// 要不是现在想不到什么太好的办法...
+			updateConfig := func() {
+				dpkg.ServerIdentityMap = dpkg.ServerIdentityMap[0:0]
+				for _, thisServer := range dpkg.ServerIdentityList {
+					thisMap, _ := structs.ToMap(thisServer, "map")
+					dpkg.ServerIdentityMap = append(dpkg.ServerIdentityMap, thisMap)
+				}
+				dpkg.ServerIdentityConfig.Set("server_identity", dpkg.ServerIdentityMap)
+
+				dpkg.ServerIdentityConfig.WriteConfig()
+
+			}
+			updateConfig()
+
+			fmt.Printf("server ID: %v has been removed. Component kept: %v. Otherwise are removed.\n", serverID, componentKeep)
 		},
 	}
 	remove.Flags().UintVar(&serverID, "server-id", 0, "")
@@ -135,7 +132,6 @@ func InitRemoveCMD() *cobra.Command {
 
 	// Which component you want to keep? only accepts {log, config}. Default is {}.
 	remove.Flags().StringSliceVar(&componentKeep, "component-keep", nil, "Which component you want to keep, blank means remove everything")
-	remove.Flags().BoolVarP(&confirm, "yes", "y", false, "")
 
 	return remove
 }

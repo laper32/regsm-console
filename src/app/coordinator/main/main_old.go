@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 // windows: go build -o gsm-coordinator.exe
 // linux: go build -o gsm-coordinator
 
@@ -70,14 +73,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		serverID := uint(message["server_id"].(float64))
 		fmt.Println(input)
 		fmt.Println(serverID)
-		// LOGIC: 当CLI想向服务器发送指令/attach时，寻找这个服务器的daemon 然后中继连接到对应的daemon=>server
-		// 所以，这里的思路是，根据serverID，然后去map里面找到这个服务器，最后执行其他动作
-		// 问题在于，为什么，这里是null？
-		// 复现方法：开三个cmd，分别执行：
-		// ./gsm-coordinator
-		// ./gsm server start --server-id=1
-		// ./gsm server send amxx --server-id=1
-		fmt.Println(hub.actors[serverID])
 		return
 	} else {
 		fmt.Println("Unknown role. Terminate this connection.")

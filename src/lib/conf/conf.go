@@ -11,6 +11,17 @@ type Config struct {
 	Path []string
 }
 
+// Test the config whether exists, if not, then we insert the new one
+func TestOrInsert(cfg *viper.Viper, key string, value interface{}) {
+	if cfg == nil {
+		panic("Config passing in is nullptr.")
+	}
+
+	if !cfg.IsSet(key) {
+		cfg.Set(key, value)
+	}
+}
+
 // Load is to load the config, and return its pointer.
 //
 // Note:

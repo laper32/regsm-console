@@ -16,8 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var NDEBUG bool = true
-
 func InitInstallCMD() *cobra.Command {
 	// gsm server install [--game] [--symlink --symlink-server-id] [--import --import-from-dir]
 
@@ -103,11 +101,12 @@ func InitInstallCMD() *cobra.Command {
 				// Indeed, the intermidiate server chain with possible deleted.
 				// But it does not affect the root result.
 				// Root server not deleted=everything is OK.
-
-				symlinkServer = dpkg.FindRootSymlinkServer(symlinkServer.ID)
-				if symlinkServer == nil {
-					fmt.Println("Unable to find the root server.")
-					return
+				if symlinkServer.SymlinkServerID != 0 {
+					symlinkServer = dpkg.FindRootSymlinkServer(symlinkServer.ID)
+					if symlinkServer == nil {
+						fmt.Println("Unable to find the root server.")
+						return
+					}
 				}
 
 				if symlinkServer.Deleted {
@@ -131,13 +130,15 @@ func InitInstallCMD() *cobra.Command {
 					// In this term, we have to mkdir rather create a symlink......
 					// 	There still also has a solution to handle this case, but this is restricted
 					// in commercial version.
+					fmt.Printf("Creating log directory...")
 					err := os.Mkdir(thisLogDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
 					}
+					fmt.Println("OK")
 
-					fmt.Printf("Creating symbolic link...")
+					fmt.Printf("Creating symbolic link: %v -> %v ...", rootServerDirectory, thisServerDirectory)
 					err = os.Symlink(rootServerDirectory, thisServerDirectory)
 					if err != nil {
 						fmt.Println("ERROR:", err)
@@ -145,15 +146,18 @@ func InitInstallCMD() *cobra.Command {
 					}
 					fmt.Println("OK")
 
+					fmt.Printf("Creating config directory...")
 					err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
 					}
+					fmt.Println("OK")
 				}
 
 				// Check the info of reuse id
 				// If we have found the id reuse, then we will modify the wrapper to this deleted server.
+
 				canReuseID := func() bool {
 					for i, this := range dpkg.ServerIdentityList {
 						if this.Deleted {
@@ -167,16 +171,18 @@ func InitInstallCMD() *cobra.Command {
 					}
 					return false
 				}()
-
-				pushNewServer := func() {
+				if !canReuseID {
 					thisServer = &dpkg.ServerIdentity{
 						ID:              uint(len(dpkg.ServerIdentityList)) + 1,
 						Game:            symlinkServer.Game,
 						Deleted:         false,
 						SymlinkServerID: symlinkServerID,
 					}
-					dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 				}
+
+				// pushNewServer := func() {
+				// 	dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
+				// }
 
 				if !misc.Agree && misc.Decline {
 					return
@@ -216,31 +222,27 @@ func InitInstallCMD() *cobra.Command {
 				}
 
 				// We need to check symlink dir whether exists...
-
-				if !NDEBUG {
-					if path.Exist(symlinkServerDir) {
-						start := time.Now()
-						if canReuseID {
-							dpkg.UpdateServerIdentity()
-						} else {
-							pushNewServer()
-							dpkg.UpdateServerIdentity()
-						}
-						fmt.Println("Generating server directories...")
-						generateServerDirectory(thisServer.SymlinkServerID)
-						fmt.Println("OK")
-
-						fmt.Printf("Writing default configuration...")
-						cliconf.WriteDefaultGameConfig(thisServer.Game, configDir)
-						fmt.Println("OK")
-
-						elapsed := time.Since(start)
-						fmt.Println("Installation complete. Time elapsed: ", elapsed)
-					} else {
-						fmt.Println("Unexpected error occured: symlink server dir has been deleted!")
-						return
+				if path.Exist(symlinkServerDir) {
+					start := time.Now()
+					if !canReuseID {
+						dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 					}
+					dpkg.UpdateServerIdentity()
+					fmt.Println("Generating server directories...")
+					generateServerDirectory(thisServer.ID)
+					fmt.Println("OK")
+
+					fmt.Printf("Writing default configuration...")
+					cliconf.WriteDefaultGameConfig(thisServer.Game, configDir)
+					fmt.Println("OK")
+
+					elapsed := time.Since(start)
+					fmt.Println("Installation complete. Time elapsed: ", elapsed)
+				} else {
+					fmt.Println("Unexpected error occured: symlink server dir has been deleted!")
+					return
 				}
+
 				return
 			}
 
@@ -265,21 +267,29 @@ func InitInstallCMD() *cobra.Command {
 
 				generateServerDirectory := func(serverID uint) {
 					thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
+					fmt.Printf("Creating log directory...")
 					err := os.Mkdir(thisLogDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
 					}
+					fmt.Println("OK")
+
+					fmt.Printf("Creating server directory...")
 					err = os.Mkdir(thisServerDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
 					}
+					fmt.Println("OK")
+
+					fmt.Printf("Creating config directory...")
 					err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 					if err != nil {
 						fmt.Println("ERROR:", err)
 						return
 					}
+					fmt.Println("OK")
 				}
 
 				// Check the info of reuse id
@@ -342,30 +352,29 @@ func InitInstallCMD() *cobra.Command {
 					}
 				}
 
-				if !NDEBUG {
-					start := time.Now()
-					if canReuseID {
-						dpkg.UpdateServerIdentity()
-					} else {
-						pushNewServer()
-						dpkg.UpdateServerIdentity()
-					}
-
-					fmt.Printf("Generating server directories...")
-					generateServerDirectory(thisServer.ID)
-					fmt.Println("OK")
-
-					fmt.Printf("Copying files...")
-					shutil.CopyDir(importDir, serverDir)
-					fmt.Println("OK")
-
-					fmt.Printf("Writing default configurations...")
-					cliconf.WriteDefaultGameConfig(game, configDir)
-					fmt.Println("OK")
-
-					elapsed := time.Since(start)
-					fmt.Println("Installation complete. Time elapsed: ", elapsed)
+				start := time.Now()
+				if canReuseID {
+					dpkg.UpdateServerIdentity()
+				} else {
+					pushNewServer()
+					dpkg.UpdateServerIdentity()
 				}
+
+				fmt.Printf("Generating server directories...")
+				generateServerDirectory(thisServer.ID)
+				fmt.Println("OK")
+
+				fmt.Printf("Copying files...")
+				shutil.CopyDir(importDir, serverDir)
+				fmt.Println("OK")
+
+				fmt.Printf("Writing default configurations...")
+				cliconf.WriteDefaultGameConfig(game, configDir)
+				fmt.Println("OK")
+
+				elapsed := time.Since(start)
+				fmt.Println("Installation complete. Time elapsed: ", elapsed)
+
 				return
 			}
 
@@ -384,21 +393,29 @@ func InitInstallCMD() *cobra.Command {
 
 			generateServerDirectory := func(serverID uint) {
 				thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
+				fmt.Printf("Creating log directory...")
 				err := os.Mkdir(thisLogDirectory, os.ModePerm)
 				if err != nil {
 					fmt.Println("ERROR:", err)
 					return
 				}
+				fmt.Println("OK")
+
+				fmt.Printf("Creating server directory...")
 				err = os.Mkdir(thisServerDirectory, os.ModePerm)
 				if err != nil {
 					fmt.Println("ERROR:", err)
 					return
 				}
+				fmt.Println("OK")
+
+				fmt.Printf("Creating config directory...")
 				err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 				if err != nil {
 					fmt.Println("ERROR:", err)
 					return
 				}
+				fmt.Println("OK")
 			}
 
 			// Check the info of reuse id
@@ -459,54 +476,53 @@ func InitInstallCMD() *cobra.Command {
 				}
 			}
 
-			if !NDEBUG {
-				start := time.Now()
-				if canReuseID {
-					dpkg.UpdateServerIdentity()
-				} else {
-					pushNewServer()
-					dpkg.UpdateServerIdentity()
-				}
-
-				fmt.Printf("Generating server directories...")
-				generateServerDirectory(thisServer.ID)
-				fmt.Println("OK")
-
-				executeInstallation := func() {
-					installVia := result.Specific["install_via"]
-					if installVia == "steamcmd" {
-						appid, modName, custom := int64(result.Specific["appid"].(float64)), "", ""
-
-						if value, ok := result.Specific["mod"].(string); ok {
-							modName = value
-						}
-
-						if value, ok := result.Specific["custom"]; ok {
-							custom = value.(string)
-						}
-
-						var platformList []string
-						for _, this := range result.Specific["platform"].([]interface{}) {
-							platformList = append(platformList, this.(string))
-						}
-						fmt.Println(appid, modName, custom)
-
-						dpkg.SteamCMDInstall(platformList, serverDir, appid, modName, true, custom)
-						return
-					}
-				}
-
-				fmt.Println("Installing server...")
-				executeInstallation()
-				fmt.Println("OK")
-
-				fmt.Printf("Writing default configurations...")
-				cliconf.WriteDefaultGameConfig(game, configDir)
-				fmt.Println("OK")
-
-				elapsed := time.Since(start)
-				fmt.Println("Installation complete. Time elapsed: ", elapsed)
+			start := time.Now()
+			if canReuseID {
+				dpkg.UpdateServerIdentity()
+			} else {
+				pushNewServer()
+				dpkg.UpdateServerIdentity()
 			}
+
+			fmt.Printf("Generating server directories...")
+			generateServerDirectory(thisServer.ID)
+			fmt.Println("OK")
+
+			executeInstallation := func() {
+				installVia := result.Specific["install_via"]
+				if installVia == "steamcmd" {
+					appid, modName, custom := int64(result.Specific["appid"].(float64)), "", ""
+
+					if value, ok := result.Specific["mod"].(string); ok {
+						modName = value
+					}
+
+					if value, ok := result.Specific["custom"]; ok {
+						custom = value.(string)
+					}
+
+					var platformList []string
+					for _, this := range result.Specific["platform"].([]interface{}) {
+						platformList = append(platformList, this.(string))
+					}
+					fmt.Println(appid, modName, custom)
+
+					dpkg.SteamCMDInstall(platformList, serverDir, appid, modName, true, custom)
+					return
+				}
+			}
+
+			fmt.Println("Installing server...")
+			executeInstallation()
+			fmt.Println("OK")
+
+			fmt.Printf("Writing default configurations...")
+			cliconf.WriteDefaultGameConfig(game, configDir)
+			fmt.Println("OK")
+
+			elapsed := time.Since(start)
+			fmt.Println("Installation complete. Time elapsed: ", elapsed)
+
 		},
 	}
 	install.Flags().StringVar(&game, "game", "", "Game to install. Must explicitly declared unless \"--symlink\" is set.")
