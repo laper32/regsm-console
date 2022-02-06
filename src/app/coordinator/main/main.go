@@ -57,6 +57,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	role := data["role"].(string)
+
 	actor := &Actor{
 		role:     role,
 		conn:     conn,
@@ -64,8 +65,23 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if role == "server" {
-		actor.identity["server_id"] = uint(data["server_id"].(float64))
-		actor.identity["daemon_pid"] = int(data["daemon_pid"].(float64))
+		serverID := uint(data["server_id"].(float64))
+		testActor := hub.actors[serverID]
+		if testActor != nil {
+			for k := range data {
+				delete(data, k)
+			}
+			detail := make(map[string]interface{})
+			detail["server_started"] = true
+			data["level"] = "error"
+			data["role"] = "coordinator"
+			data["message"] = detail
+			conn.WriteJSON(&data)
+			return
+		} else {
+			actor.identity["server_id"] = serverID
+			actor.identity["daemon_pid"] = int(data["daemon_pid"].(float64))
+		}
 	} else if role == "coordinator" {
 		fmt.Println("This connection comes from an another coordinator.")
 		return
@@ -92,9 +108,8 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 			}
 
 			msg := <-hub.message
-			fmt.Println(string(msg))
 
-			err = conn.WriteJSON(msg)
+			err = conn.WriteMessage(websocket.TextMessage, msg)
 			if err != nil {
 				log.Info("Connection lost:", conn.RemoteAddr().String())
 				return
@@ -116,7 +131,19 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("Unknown role. Terminate this connection.")
 		return
 	}
+
 	hub.register <- actor
+
+	for k := range data {
+		delete(data, k)
+	}
+	detail := make(map[string]interface{})
+	detail["connected"] = true
+	data["level"] = "info"
+	data["role"] = "coordinator"
+	data["message"] = detail
+	actor.conn.WriteJSON(&data)
+
 	fmt.Println("Actor:", conn.RemoteAddr().String(), "connected. Role:", actor.role)
 	go read(actor)
 }
@@ -131,12 +158,18 @@ func read(actor *Actor) {
 		}
 		data := make(map[string]interface{})
 		err = json.Unmarshal(msg, &data)
-		if err != nil {
-			log.Error(err)
-			return
+		if err == nil {
+
+			// message := data["message"].(map[string]interface{})
+			// exited := message["exited"].(bool)
+			// if exited {
+			// 	log.Info("Server exited. ID:", actor.identity["server_id"])
+			// 	hub.unregister <- actor
+			// 	break
+			// }
 		}
+
 		hub.message <- msg
-		// log.Info(data)
 	}
 }
 

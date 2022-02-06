@@ -105,36 +105,6 @@ func InitStartCMD() *cobra.Command {
 
 			locateExecutable()
 
-			// We need to pass parameters to gsm-server
-			// That for convience, we send params via JSON
-			// Leave everything to gsm-server to handle.
-			// In this term, our task is completed.
-			type Application struct {
-				ID         uint   `json:"server_id"`
-				Dir        string `json:"dir"`
-				Executable string `json:"executable"`
-				Args       string `json:"args"`
-			}
-			data := make(map[string]interface{})
-			data["application"] = &Application{
-				ID:         thisServer.ID,
-				Dir:        serverExecutableDir,
-				Executable: serverExecutablePath,
-				Args:       strings.Join(cfg.GetStringSlice("server.param"), " "),
-			}
-
-			type CoordinatorPolicy struct {
-				RetryCount                uint `json:"retry_count"`
-				AllowRetryAtStartup       bool `json:"allow_retry_at_startup"`
-				AllowReconnectWhenRunning bool `json:"allow_reconnect_when_running"`
-			}
-
-			type Coordinator struct {
-				IP     string             `json:"ip"`
-				Port   uint               `json:"port"`
-				Policy *CoordinatorPolicy `json:"policy"`
-			}
-
 			coordinator_cfg, err := cliconf.CoordinatorConfiguration()
 
 			if err != nil {
@@ -142,15 +112,40 @@ func InitStartCMD() *cobra.Command {
 				return
 			}
 
-			data["coordinator"] = &Coordinator{
-				IP:   coordinator_cfg.GetString("coordinator.ip"),
-				Port: coordinator_cfg.GetUint("coordinator.port"),
-				Policy: &CoordinatorPolicy{
-					RetryCount:                cfg.GetUint("coordinator.retry_count"),
-					AllowRetryAtStartup:       cfg.GetBool("coordinator.allow_retry_at_startup"),
-					AllowReconnectWhenRunning: cfg.GetBool("coordinator.allow_reconnect_when_running"),
-				},
-			}
+			// We need to pass parameters to gsm-server
+			// That for convience, we send params via JSON
+			// Leave everything to gsm-server to handle.
+			// In this term, our task is completed.
+
+			application_policy := make(map[string]interface{})
+			application_policy["allow_update"] = cfg.GetBool("server.allow_update")
+			application_policy["auto_update"] = cfg.GetBool("server.auto_update")
+			application_policy["update_on_start"] = cfg.GetBool("server.update_on_start") // for the possibility that this server crashed.
+			application_policy["auto_restart"] = cfg.GetBool("server.auto_restart")
+			application_policy["restart_after_delay"] = cfg.GetInt("server.restart_after_delay")
+			application_policy["max_restart_count"] = cfg.GetInt("server.max_restart_count")
+
+			application := make(map[string]interface{})
+			application["server_id"] = thisServer.ID
+			application["game"] = cfg.GetString("server.game")
+			application["dir"] = serverExecutableDir
+			application["executable"] = serverExecutablePath
+			application["args"] = strings.Join((cfg.GetStringSlice("server.param")), " ")
+			application["policy"] = application_policy
+
+			coordinator_policy := make(map[string]interface{})
+			coordinator_policy["retry_count"] = cfg.GetUint("coordinator.retry_count")
+			coordinator_policy["allow_retry_at_startup"] = cfg.GetBool("coordinator.allow_retry_at_startup")
+			coordinator_policy["allow_reconnect_when_running"] = cfg.GetBool("coordinator.allow_reconnect_when_running")
+
+			coordinator := make(map[string]interface{})
+			coordinator["ip"] = coordinator_cfg.GetString("coordinator.ip")
+			coordinator["port"] = coordinator_cfg.GetUint("coordinator.port")
+			coordinator["policy"] = coordinator_policy
+
+			data := make(map[string]interface{})
+			data["application"] = application
+			data["coordinator"] = coordinator
 
 			msg := make(map[string]interface{})
 			msg["command"] = "start"

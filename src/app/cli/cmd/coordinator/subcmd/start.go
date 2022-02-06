@@ -32,7 +32,11 @@ func InitStartCMD() *cobra.Command {
 				return
 			}
 			exedir := fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH"))
-			passin := []string{exedir, cfg.GetString("coordinator.ip"), fmt.Sprintf("%v", cfg.GetUint("coordinator.port"))}
+			passin := []string{
+				exedir,
+				cfg.GetString("coordinator.ip"), fmt.Sprintf("%v", cfg.GetUint("coordinator.port")),
+				fmt.Sprintf("%v", cfg.GetBool("coordinator.pure")), cfg.GetString("coordinator.other_coordinator_address"),
+			}
 
 			exe := &exec.Cmd{
 				Path:   exedir,

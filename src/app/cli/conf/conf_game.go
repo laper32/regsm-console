@@ -64,7 +64,12 @@ func WriteGameConfigField(cfg *viper.Viper, whatGame string) {
 	conf.TestOrInsert(cfg, "server.auto_restart", true)
 
 	// When crashed, how many seconds for us to wait to restart this server?
-	conf.TestOrInsert(cfg, "server.restart_after_seconds", 5)
+	// -1 means that never retry
+	conf.TestOrInsert(cfg, "server.restart_after_delay", 5)
+
+	// How many times for restarting the server when the server crashed?
+	// -1 means infinity.
+	conf.TestOrInsert(cfg, "server.max_restart_count", -1)
 
 	// The maximum retry count.
 	// Shared for both following two configurations.

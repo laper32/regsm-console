@@ -9,8 +9,19 @@ import (
 )
 
 func WriteCoordinatorConfigField(cfg *viper.Viper) {
+	// This coordinator's IP
 	conf.TestOrInsert(cfg, "coordinator.ip", "localhost")
+
+	// This coordinator's port
 	conf.TestOrInsert(cfg, "coordinator.port", 3484)
+
+	// Determine whether this coordinator accepts only other coordinators', or servers' connection.
+	// This is extermely useful when you have a plenty of servers.
+	conf.TestOrInsert(cfg, "coordinator.pure", false)
+
+	// Other coordinator's address.
+	// Once you set this field, we will trying to connect to other coordinators.
+	conf.TestOrInsert(cfg, "coordinator.other_coordinator_address", "")
 }
 
 func CoordinatorConfiguration() (*viper.Viper, error) {

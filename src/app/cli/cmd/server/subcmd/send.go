@@ -1,7 +1,6 @@
 package subcmd
 
 import (
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"strings"
@@ -62,7 +61,7 @@ func InitSendCMD() *cobra.Command {
 			defer c.Close()
 
 			fmt.Printf("Sending message...")
-			err = c.WriteJSON(message)
+			err = c.WriteJSON(&message)
 			if err != nil {
 				fmt.Println()
 				log.Error(err)
@@ -71,28 +70,16 @@ func InitSendCMD() *cobra.Command {
 			fmt.Println("DONE.")
 
 			fmt.Printf("Receving message...")
+
 			_, msg, err := c.ReadMessage()
 			if err != nil {
-				fmt.Println("No connection:", err)
-				return
-			}
-			fmt.Println()
-			toDecode := string(msg)
-			fmt.Println(toDecode)
-			decodeBytes, err := base64.URLEncoding.DecodeString(toDecode)
-			if err != nil {
+				fmt.Println()
 				fmt.Println(err)
 				return
 			}
-			fmt.Println(string(decodeBytes))
-			// decodedMessage, err := base64.StdEncoding.DecodeString(string(msg))
-			// if err != nil {
-			// 	log.Error(err)
-			// 	return
-			// }
-			// fmt.Println("OK")
+			fmt.Println("OK")
 
-			// fmt.Println(decodedMessage)
+			fmt.Println(string(msg))
 		},
 	}
 	send.Flags().UintVar(&serverID, "server-id", 0, "Server ID")

@@ -9,7 +9,7 @@
       - [ ] restart
       - [ ] status
     - [ ] server
-      - [ ] start
+      - [x] start
       - [ ] stop
       - [ ] restart
       - [x] update
