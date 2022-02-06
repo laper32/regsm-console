@@ -4,7 +4,7 @@
   - [ ] gsm
     - [ ] update
     - [ ] coordinator
-      - [ ] start
+      - [x] start
       - [ ] stop
       - [ ] restart
       - [ ] status
@@ -14,6 +14,7 @@
       - [ ] restart
       - [x] update
       - [x] remove
-      - [ ] console
+      - [x] send
+      - [ ] attach
       - [x] search
       - [x] install (Partial: SteamCMD only)

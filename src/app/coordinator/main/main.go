@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/websocket"
+	"github.com/laper32/regsm-console/src/app/coordinator/conf"
+	"github.com/laper32/regsm-console/src/lib/log"
 )
 
 type Actor struct {
@@ -21,6 +24,7 @@ type Hub struct {
 	actors     map[uint]*Actor
 	register   chan *Actor
 	unregister chan *Actor
+	message    chan []byte
 }
 
 var (
@@ -29,26 +33,27 @@ var (
 		actors:     make(map[uint]*Actor),
 		register:   make(chan *Actor),
 		unregister: make(chan *Actor),
+		message:    make(chan []byte),
 	}
 )
 
 func wsHandle(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		fmt.Println("ERROR:", err)
+		log.Error(err)
 		return
 	}
 	// Read the first connect message, and resolve it.
 	// We need to know what role the connection is.
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		fmt.Println("Connection lost:", conn.RemoteAddr().String())
+		log.Info("Connection lost:", conn.RemoteAddr().String())
 		return
 	}
 	var data map[string]interface{}
 	err = json.Unmarshal(msg, &data)
 	if err != nil {
-		fmt.Println("ERROR:", err)
+		log.Error(err)
 		return
 	}
 	role := data["role"].(string)
@@ -65,28 +70,53 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("This connection comes from an another coordinator.")
 		return
 	} else if role == "cli" {
-		message := data["message"].(map[string]interface{})
-		input := message["message"].(string)
-		serverID := uint(message["server_id"].(float64))
-		fmt.Println(input)
-		fmt.Println(serverID)
-		// LOGIC: 当CLI想向服务器发送指令/attach时，寻找这个服务器的daemon 然后中继连接到对应的daemon=>server
-		// 所以，这里的思路是，根据serverID，然后去map里面找到这个服务器，最后执行其他动作
-		// 问题在于，为什么，这里是null？
-		// 复现方法：开三个cmd，分别执行：
-		// ./gsm-coordinator
-		// ./gsm server start --server-id=1
-		// ./gsm server send amxx --server-id=1
-		fmt.Println(hub.actors[serverID])
+		whatToDo := data["command"].(string)
+		switch whatToDo {
+		case "send":
+			fmt.Println("Sending command to the specific server.")
+			message := data["message"].(map[string]interface{})
+			serverID := uint(message["server_id"].(float64))
+			toExecute := message["message"].(string)
+			thisActor := hub.actors[serverID]
+			if thisActor == nil {
+				log.Info("This server currently offline. ID:", serverID)
+				return
+			}
+			sendJSON := make(map[string]interface{})
+			sendJSON["command"] = "send"
+			sendJSON["message"] = toExecute
+			err = thisActor.conn.WriteJSON(&sendJSON)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			msg := <-hub.message
+			fmt.Println(string(msg))
+
+			err = conn.WriteJSON(msg)
+			if err != nil {
+				log.Info("Connection lost:", conn.RemoteAddr().String())
+				return
+			}
+		case "attach":
+			break
+		case "stop":
+			break
+		case "restart":
+			break
+		case "update":
+			break
+		default:
+			log.Error("Unknown command:", whatToDo)
+		}
+
 		return
 	} else {
 		fmt.Println("Unknown role. Terminate this connection.")
 		return
 	}
 	hub.register <- actor
-	defer func() {
-		hub.unregister <- actor
-	}()
 	fmt.Println("Actor:", conn.RemoteAddr().String(), "connected. Role:", actor.role)
 	go read(actor)
 }
@@ -102,12 +132,11 @@ func read(actor *Actor) {
 		data := make(map[string]interface{})
 		err = json.Unmarshal(msg, &data)
 		if err != nil {
-			fmt.Println("ERROR:", err)
+			log.Error(err)
 			return
 		}
-		if data["level"].(string) == "error" {
-			fmt.Println(data["message"])
-		}
+		hub.message <- msg
+		// log.Info(data)
 	}
 }
 
@@ -116,9 +145,7 @@ func (h *Hub) run() {
 		select {
 		case actor := <-h.register:
 			serverID := actor.identity["server_id"].(uint)
-			fmt.Println("Adding server=>Server ID:", serverID)
 			h.actors[serverID] = actor
-			fmt.Println(h.actors[serverID])
 		case actor := <-h.unregister:
 			serverID := actor.identity["server_id"].(uint)
 			delete(h.actors, serverID)
@@ -127,14 +154,10 @@ func (h *Hub) run() {
 }
 
 func main() {
+	cfg := conf.Init()
+	log.Init(cfg.Log)
+
 	go hub.run()
 	http.HandleFunc("/", wsHandle)
-	// If we use gsm coordinator start => GSM_PATH is already set
-	// cfg := conf.Load(&conf.Config{
-	// 	Name: "coordinator",
-	// 	Type: "toml",
-	// 	Path: []string{os.Getenv("GSM_PATH")},
-	// })
-	// http.ListenAndServe(fmt.Sprintf("%v:%v", cfg.GetString("coordinator.ip"), cfg.GetUint("coordinator.port")), nil)
-	http.ListenAndServe("localhost:3484", nil)
+	http.ListenAndServe(fmt.Sprintf("%v:%v", os.Args[1], os.Args[2]), nil)
 }

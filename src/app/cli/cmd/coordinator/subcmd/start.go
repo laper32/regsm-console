@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 
+	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/spf13/cobra"
 )
 
@@ -23,24 +24,46 @@ func InitStartCMD() *cobra.Command {
 
 			// The coordinator is at ${GSM_PATH}/gsm-coordinator.exe
 
+			// If windows: gsm-coordinator.exe
+			// otherwise gsm-coordinator
+			cfg, err := cliconf.CoordinatorConfiguration()
+			if err != nil {
+				fmt.Println("ERROR:", err)
+				return
+			}
+			exedir := fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH"))
+			passin := []string{exedir, cfg.GetString("coordinator.ip"), fmt.Sprintf("%v", cfg.GetUint("coordinator.port"))}
+
+			exe := &exec.Cmd{
+				Path:   exedir,
+				Dir:    os.Getenv("GSM_PATH"),
+				Env:    os.Environ(),
+				Args:   passin,
+				Stdin:  os.Stdin,
+				Stdout: os.Stdout,
+				Stderr: os.Stderr,
+			}
+			exe.Run()
+
 			// How could we know when the coordinator starts failed?
-			start := make(chan bool)
-			go func() {
-				cmd := &exec.Cmd{
-					Path: fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH")),
-					Dir:  os.Getenv("GSM_PATH"),
-					Env:  os.Environ(),
-				}
-				err := cmd.Start()
-				if err != nil {
-					fmt.Println("ERROR:", err)
-					start <- false
-					return
-				}
-				fmt.Println("Coordinator has been started. Process ID:", cmd.Process.Pid)
-				start <- true
-			}()
-			<-start
+			// start := make(chan bool)
+			// go func() {
+			// 	cmd := &exec.Cmd{
+			// 		Path: exedir,
+			// 		Dir:  os.Getenv("GSM_PATH"),
+			// 		Env:  os.Environ(),
+			// 		Args: []string{fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH")), cfg.GetString("coordinator.ip"), string(cfg.GetUint("coordinator.port"))},
+			// 	}
+			// 	err := cmd.Start()
+			// 	if err != nil {
+			// 		fmt.Println("ERROR:", err)
+			// 		start <- false
+			// 		return
+			// 	}
+			// 	fmt.Println("Coordinator has been started. Process ID:", cmd.Process.Pid)
+			// 	start <- true
+			// }()
+			// <-start
 		},
 	}
 
