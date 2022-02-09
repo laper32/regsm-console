@@ -19,8 +19,8 @@ func InitSearchCMD() *cobra.Command {
 			// allow to search {name, short}, otherwise are not provided.
 			// (It is not the CLI can do. If you want to do advanced search,
 			// you should use something like ElasticSearch instead of typing in CLI.....)
-			// 	It will search both 'name' and 'short', and return results accoring
-			// your text.
+			// 	It will search both 'name' and 'short', and return results according to
+			// your input.
 			//
 			// 	Also, this is list search, that you can search based on the list
 			// of games what you want to find.

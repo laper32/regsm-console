@@ -8,23 +8,39 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/laper32/regsm-console/src/app/coordinator/conf"
+	"github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/laper32/regsm-console/src/lib/log"
+	"github.com/laper32/regsm-console/src/lib/status"
+)
+
+const (
+	// Time allowed to write a message to the peer.
+	writeWait = 5 * time.Second
+
+	// Time allowed to read the next pong message from the peer.
+	pongWait = 10 * time.Second
+
+	// Send pings to peer with this period. Must be less than pongWait.
+	pingPeriod = (pongWait * 9) / 10
 )
 
 type Actor struct {
 	role     string
 	conn     *websocket.Conn
 	identity map[string]interface{}
+	io       struct {
+		input  chan []byte
+		output chan []byte
+	}
 }
 
 type Hub struct {
 	actors     map[uint]*Actor
 	register   chan *Actor
 	unregister chan *Actor
-	message    chan []byte
 }
 
 var (
@@ -33,13 +49,13 @@ var (
 		actors:     make(map[uint]*Actor),
 		register:   make(chan *Actor),
 		unregister: make(chan *Actor),
-		message:    make(chan []byte),
 	}
 )
 
 func wsHandle(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
+		// 要写到文件里面的哈
 		log.Error(err)
 		return
 	}
@@ -47,129 +63,104 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	// We need to know what role the connection is.
 	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		log.Info("Connection lost:", conn.RemoteAddr().String())
+		log.Error(err)
 		return
 	}
-	var data map[string]interface{}
+	data := make(map[string]interface{})
 	err = json.Unmarshal(msg, &data)
 	if err != nil {
 		log.Error(err)
 		return
 	}
 	role := data["role"].(string)
-
-	actor := &Actor{
-		role:     role,
-		conn:     conn,
-		identity: make(map[string]interface{}),
-	}
-
-	if role == "server" {
-		serverID := uint(data["server_id"].(float64))
-		testActor := hub.actors[serverID]
-		if testActor != nil {
-			for k := range data {
-				delete(data, k)
+	detail := data["detail"].(map[string]interface{})
+	var actor *Actor
+	statusCode := int(data["code"].(float64))
+	// 设计失误
+	// 连接红蓝字应该是全局的 但我当时没考虑到
+	// 2.0会重新设计
+	isLoggingIn := status.ServerConnectedCoordinatorAndLoggingIn.ToInt() == statusCode
+	if isLoggingIn {
+		if role == "server" || role == "coordinator" {
+			actor = &Actor{
+				role:     role,
+				conn:     conn,
+				identity: make(map[string]interface{}),
+				io: struct {
+					input  chan []byte
+					output chan []byte
+				}{input: make(chan []byte), output: make(chan []byte)},
 			}
-			detail := make(map[string]interface{})
-			detail["server_started"] = true
-			data["level"] = "error"
-			data["role"] = "coordinator"
-			data["message"] = detail
-			conn.WriteJSON(&data)
+		}
+		switch role {
+		case "cli":
+			whatToDo := detail["command"].(string)
+			switch whatToDo {
+			case "attach":
+			case "restart":
+			case "send":
+				serverID := uint(detail["server_id"].(float64))
+				thisActor := hub.actors[serverID]
+				if thisActor == nil {
+					log.Info(status.CoordinatorServerOffline.WriteDetail(""))
+					conn.Close()
+					return
+				}
+				thisActor.io.input <- msg
+			case "stop":
+			case "update":
+			default:
+				log.Error(fmt.Sprintf("Unknwon command \"%v\"", whatToDo))
+				// TODO:
+				// 	1. Send back to the CLI connection.
+				// 	2. Terminate this connection.
+				// conn.Close()
+				return
+			}
+		case "coordinator":
 			return
-		} else {
+		case "server":
+			// Forcely close repeated connection...
+			serverID := uint(detail["server_id"].(float64))
+			hasActor := hub.actors[serverID]
+			if hasActor != nil {
+				conn.WriteMessage(websocket.TextMessage, []byte(status.CoordinatorServerAlreadyExist.WriteDetail("")))
+				return
+			}
 			actor.identity["server_id"] = serverID
-			actor.identity["daemon_pid"] = int(data["daemon_pid"].(float64))
-		}
-	} else if role == "coordinator" {
-		fmt.Println("This connection comes from an another coordinator.")
-		return
-	} else if role == "cli" {
-		whatToDo := data["command"].(string)
-		switch whatToDo {
-		case "send":
-			fmt.Println("Sending command to the specific server.")
-			message := data["message"].(map[string]interface{})
-			serverID := uint(message["server_id"].(float64))
-			toExecute := message["message"].(string)
-			thisActor := hub.actors[serverID]
-			if thisActor == nil {
-				log.Info("This server currently offline. ID:", serverID)
-				return
-			}
-			sendJSON := make(map[string]interface{})
-			sendJSON["command"] = "send"
-			sendJSON["message"] = toExecute
-			err = thisActor.conn.WriteJSON(&sendJSON)
-			if err != nil {
-				log.Error(err)
-				return
-			}
-
-			msg := <-hub.message
-
-			err = conn.WriteMessage(websocket.TextMessage, msg)
-			if err != nil {
-				log.Info("Connection lost:", conn.RemoteAddr().String())
-				return
-			}
-		case "attach":
-			break
-		case "stop":
-			break
-		case "restart":
-			break
-		case "update":
-			break
+			actor.identity["daemon_pid"] = int(detail["daemon_pid"].(float64))
 		default:
-			log.Error("Unknown command:", whatToDo)
+			log.Error(fmt.Sprintf("Terminating this connection due to the unknown role: %v", role))
+			conn.Close()
+			return
 		}
-
-		return
-	} else {
-		fmt.Println("Unknown role. Terminate this connection.")
-		return
-	}
-
-	hub.register <- actor
-
-	for k := range data {
-		delete(data, k)
-	}
-	detail := make(map[string]interface{})
-	detail["connected"] = true
-	data["level"] = "info"
-	data["role"] = "coordinator"
-	data["message"] = detail
-	actor.conn.WriteJSON(&data)
-
-	fmt.Println("Actor:", conn.RemoteAddr().String(), "connected. Role:", actor.role)
-	go read(actor)
-}
-
-func read(actor *Actor) {
-	for {
-		_, msg, err := actor.conn.ReadMessage()
-		if err != nil {
-			fmt.Println("Actor:", actor.conn.RemoteAddr().String(), "disconnected. Role:", actor.role)
+		for k := range data {
+			delete(data, k)
+		}
+		data["role"] = "coordinator"
+		data["code"] = status.OK
+		data["message"] = status.OK.Message()
+		actor.conn.WriteJSON(&data)
+		actor.conn.ReadJSON(&data)
+		responseStatus := status.ToCode(int(data["code"].(float64)))
+		if responseStatus == status.OK {
+			detail = data["detail"].(map[string]interface{})
+			if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
+				// This should not happen.
+				return
+			}
+			hub.register <- actor
+			log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
+		} else {
 			hub.unregister <- actor
-			break
+			return
 		}
-		data := make(map[string]interface{})
-		err = json.Unmarshal(msg, &data)
-		if err == nil {
-
-			// message := data["message"].(map[string]interface{})
-			// exited := message["exited"].(bool)
-			// if exited {
-			// 	log.Info("Server exited. ID:", actor.identity["server_id"])
-			// 	hub.unregister <- actor
-			// 	break
-			// }
-		}
-
-		hub.message <- msg
+		go actor.read()
+		go actor.write()
+	} else {
+		// Unknown.
+		// Terminate this connection
+		return
 	}
 }
 
@@ -186,10 +177,49 @@ func (h *Hub) run() {
 	}
 }
 
+func (actor *Actor) read() {
+	defer func() {
+		hub.unregister <- actor
+		actor.conn.Close()
+	}()
+	actor.conn.SetReadDeadline(time.Now().Add(pongWait))
+	actor.conn.SetPongHandler(func(string) error { actor.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	for {
+		_, msg, err := actor.conn.ReadMessage()
+		if err != nil {
+			hub.unregister <- actor
+			log.Info(fmt.Sprintf("Actor: %v (%v) disconnected.", actor.identity["server_id"], actor.role))
+			break
+		}
+		fmt.Println(string(msg))
+	}
+}
+
+func (actor *Actor) write() {
+	tick := time.NewTicker(pingPeriod)
+	defer func() {
+		tick.Stop()
+		actor.conn.Close()
+	}()
+	for {
+		select {
+		case message, ok := <-actor.io.input:
+			if !ok {
+				return
+			}
+			actor.conn.WriteMessage(websocket.TextMessage, message)
+		case <-tick.C:
+			actor.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := actor.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
+}
+
 func main() {
 	cfg := conf.Init()
 	log.Init(cfg.Log)
-
 	go hub.run()
 	http.HandleFunc("/", wsHandle)
 	http.ListenAndServe(fmt.Sprintf("%v:%v", os.Args[1], os.Args[2]), nil)

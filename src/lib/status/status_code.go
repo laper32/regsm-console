@@ -1,13 +1,12 @@
 package status
 
-const (
-	UnknownError = -1
-	OK           = 0
-)
-
 var (
 	// -1 = UnknownError
+	UnknownError = New(-1, "Unknown Error")
+
 	// 0 = OK
+	OK = New(0, "OK")
+
 	// -1 and 0 are reversed, and SHOULD NOT BE MODIFIED BY ANYONE!
 
 	// 1~99999: CLI
@@ -25,12 +24,16 @@ var (
 	CLIInstallUnableToCreateSymlink                    = New(1003, "Unable to create symlink")
 	CLIInstallSymlinkServerIDFoundRecursiveReferencing = New(1004, "Symlink server ID found recursive referencing")
 	CLIInstallExplicitlyDeclareExternalServerDirectory = New(1005, "Must explictly declare the external server directory")
-	CLIInstallUnableToFindExternalServerDirectory      = New(1006, "Unable to find external server directory")
+	CLIInstallExternalServerDirectoryNotExist          = New(1006, "Unable to find external server directory")
 	CLIInstallExplicitlyDeclareWhichGameToInstall      = New(1007, "Explicitly declare which game to install")
 	CLIInstallGameNotSupported                         = New(1008, "Game is not supported")
 	CLIInstallUnableToFoundSteamCMD                    = New(1009, "Unable to found SteamCMD")
 	CLIInstallErrorFoundWhenExecutingSteamCMD          = New(1010, "Error found when executing SteamCMD")
-	CLIInstallUnableToFoundSteamCMDPreRequisite        = New(1011, "Unable to found SteamCMD's pre-requisite")
+	CLIInstallUnableToFindSteamCMDPreRequisite         = New(1011, "Unable to find SteamCMD's pre-requisite")
+	CLIInstallRootSymlinkServerNotExist                = New(1012, "Root symlink server is not exist.")
+	CLIInstallSymlinkServerNotExist                    = New(1013, "This symlink server for symlink is not exist.")
+	CLIInstallSymlinkServerDeleted                     = New(1014, "The server for symlink is deleted")
+	CLIInstallErrorOnGeneratingDirectory               = New(1015, "Error found when generating directory.")
 
 	// 2000~2999: gsm server attach
 	CLIAttachUnableEstablishConnectionToCoordinator = New(2000, "Unable to establish connection to coordinator")
@@ -63,17 +66,17 @@ var (
 	CLISearchUnableToSearchServer = New(11000, "Unable to search the server")
 
 	// 100000~199999: Server
-	ServerStartingInteratingProcess              = New(100000, "Starting interating process")
-	ServerStartingProcess                        = New(100001, "Starting process")
-	ServerStopingProcess                         = New(100002, "Stoping process")
-	ServerStopingInteratingProcess               = New(100003, "Stoping interating process")
+	ServerStartingInteractiveProcess             = New(100000, "Starting interactive process")
+	ServerStoppingInteractiveProcess             = New(100001, "Stopping interactive process")
+	ServerStarting                               = New(100002, "Starting server")
+	ServerStopping                               = New(100003, "Stopping server")
 	ServerCrashed                                = New(100004, "Server crashed")
 	ServerRestartCountingDown                    = New(100005, "Restarting counting down")
 	ServerFoundLastAbnormalExitProcess           = New(100006, "Found last abnormal exit process")
 	ServerProcessExitedButInteratingProcessIsNot = New(100007, "Process has been exited but its iterating process is not")
 	ServerSearchingCoordinator                   = New(100008, "Searching coordinator")
 	ServerFoundCoordinatorConnecting             = New(100009, "Found a coordinator, connecting")
-	ServerConnectedCoordinatorAndLogging         = New(100010, "Connected to the coordinator, logging in")
+	ServerConnectedCoordinatorAndLoggingIn       = New(100010, "Connected to the coordinator, logging in")
 
 	// 200000~299999: Coordinator
 	CoordinatorStarting                           = New(200000, "Starting coordinator")
@@ -85,6 +88,8 @@ var (
 	CoordinatorIncorrectStartupArgs               = New(200006, "Incorrect startup args")
 	CoordinatorServerNotFound                     = New(200007, "Server not found")
 	CoordinatorCoordinatorNotFound                = New(200008, "Coordinator not found")
-	CoordinaotServerOffline                       = New(200009, "Server offline")
+	CoordinatorServerOffline                      = New(200009, "Server offline")
 	CoordinatorCoordinatorOffline                 = New(200010, "Coordinator offline")
+	CoordinatorUnknownActorRole                   = New(200011, "Unknown actor role")
+	CoordinatorServerAlreadyExist                 = New(200012, "Server already exists")
 )

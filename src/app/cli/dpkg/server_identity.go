@@ -6,6 +6,7 @@ import (
 	"os"
 
 	libconf "github.com/laper32/regsm-console/src/lib/conf"
+	"github.com/laper32/regsm-console/src/lib/status"
 	"github.com/laper32/regsm-console/src/lib/structs"
 	"github.com/spf13/viper"
 )
@@ -67,16 +68,6 @@ func UpdateServerIdentity() {
 	ServerIdentityConfig.WriteConfig()
 }
 
-/* UpdateServerIdentity := func() {
-	dpkg.ServerIdentityMap = dpkg.ServerIdentityMap[0:0]
-	for _, thisServer := range dpkg.ServerIdentityList {
-		thisMap, _ := structs.ToMap(thisServer, "map")
-		dpkg.ServerIdentityMap = append(dpkg.ServerIdentityMap, thisMap)
-	}
-	dpkg.ServerIdentityConfig.Set("server_identity", dpkg.ServerIdentityMap)
-	dpkg.ServerIdentityConfig.WriteConfig()
-} */
-
 // Working around to solve recursive referencing issue.
 var __builtin_current_id uint = 0
 var __builtin_symlink_id uint = 0
@@ -84,7 +75,7 @@ var __builtin_symlink_id uint = 0
 func FindRootSymlinkServer(serverID uint) *ServerIdentity {
 	// Working around to solve recursive referencing issue.
 	if __builtin_current_id == serverID {
-		panic(fmt.Sprintf("Recursive referencing. Check %v and %v", __builtin_current_id, __builtin_symlink_id))
+		panic(status.CLIInstallSymlinkServerIDFoundRecursiveReferencing.WriteDetail(fmt.Sprintf("Recursive server ID: {%v, %v}", __builtin_current_id, __builtin_symlink_id)))
 	}
 	for _, this := range ServerIdentityList {
 		if this.SymlinkServerID != 0 {

@@ -11,6 +11,7 @@ import (
 	"github.com/laper32/regsm-console/src/app/cli/cmd/server/subcmd/sysprocattr"
 	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
+	"github.com/laper32/regsm-console/src/lib/status"
 	"github.com/spf13/cobra"
 )
 
@@ -20,14 +21,14 @@ func InitStartCMD() *cobra.Command {
 		Use: "start",
 		Run: func(cmd *cobra.Command, args []string) {
 			// 		Starting server can be done through a daemon.
-			// 		The key concept is that we need to interact console, in other words,
+			// 		The main problem is: we need to interact console, in other words,
 			// we need to use system API, eg: On windows, we need to use PostMessage to
 			// send message to the server console, and also we need to retrieve its output.
 			// Since we **MUST** retrieve the true windows handle, it is very hard
 			// to solve with just only go language (Even they do not provide a suitable
 			// OS related package...).
 			// 		Based on this, and also, this is just a CLI, we just need to send some
-			// information to daemon, then everything leave to it to resolve.
+			// information to the interator, then everything leave to it to handle.
 			// 		Now, to solve this problem, we use C# to do the job: It provide
 			// a very great method for us to interact with system API, and we don't have
 			// to take too much care about it ----- At least on Windows.
@@ -176,6 +177,8 @@ func InitStartCMD() *cobra.Command {
 				Stdout:      os.Stdout,
 				Stderr:      os.Stderr,
 			}
+			msg["role"] = "cli"
+			fmt.Println(status.ServerStartingInteractiveProcess.WriteDetail(""))
 			err = wrapperEXE.Run()
 			if err != nil {
 				fmt.Println("ERROR:", err)

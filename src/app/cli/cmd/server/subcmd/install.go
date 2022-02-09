@@ -13,6 +13,7 @@ import (
 	"github.com/laper32/regsm-console/src/lib/interact"
 	"github.com/laper32/regsm-console/src/lib/os/path"
 	"github.com/laper32/regsm-console/src/lib/os/shutil"
+	"github.com/laper32/regsm-console/src/lib/status"
 	"github.com/spf13/cobra"
 )
 
@@ -84,7 +85,7 @@ func InitInstallCMD() *cobra.Command {
 
 			// Can't let them both occur
 			if symlink && isImport {
-				fmt.Println("Should only either \"--symlink\" or \"--import\"")
+				fmt.Println(status.CLIInstallNotAllowedBothSetSymlinkAndInstall.WriteDetail(""))
 				return
 			}
 
@@ -94,7 +95,7 @@ func InitInstallCMD() *cobra.Command {
 				// Check existance first.
 				symlinkServer := dpkg.FindIdentifiedServer(symlinkServerID)
 				if symlinkServer == nil {
-					fmt.Println("The server does not exist.")
+					fmt.Println(status.CLIInstallSymlinkServerNotExist.WriteDetail(""))
 					return
 				}
 
@@ -104,13 +105,13 @@ func InitInstallCMD() *cobra.Command {
 				if symlinkServer.SymlinkServerID != 0 {
 					symlinkServer = dpkg.FindRootSymlinkServer(symlinkServer.ID)
 					if symlinkServer == nil {
-						fmt.Println("Unable to find the root server.")
+						fmt.Println(status.CLIInstallRootSymlinkServerNotExist.WriteDetail(""))
 						return
 					}
 				}
 
 				if symlinkServer.Deleted {
-					fmt.Println("Can't create symlink for a deleted server.")
+					fmt.Println(status.CLIInstallSymlinkServerDeleted.WriteDetail(""))
 					return
 				}
 
@@ -133,15 +134,15 @@ func InitInstallCMD() *cobra.Command {
 					fmt.Printf("Creating log directory...")
 					err := os.Mkdir(thisLogDirectory, os.ModePerm)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
 
-					fmt.Printf("Creating symbolic link: %v -> %v ...", rootServerDirectory, thisServerDirectory)
+					fmt.Printf("[%v -> %v] Creating symbolic link...", rootServerDirectory, thisServerDirectory)
 					err = os.Symlink(rootServerDirectory, thisServerDirectory)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallUnableToCreateSymlink.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
@@ -149,7 +150,7 @@ func InitInstallCMD() *cobra.Command {
 					fmt.Printf("Creating config directory...")
 					err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
@@ -270,7 +271,7 @@ func InitInstallCMD() *cobra.Command {
 					fmt.Printf("Creating log directory...")
 					err := os.Mkdir(thisLogDirectory, os.ModePerm)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
@@ -278,7 +279,7 @@ func InitInstallCMD() *cobra.Command {
 					fmt.Printf("Creating server directory...")
 					err = os.Mkdir(thisServerDirectory, os.ModePerm)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
@@ -286,7 +287,7 @@ func InitInstallCMD() *cobra.Command {
 					fmt.Printf("Creating config directory...")
 					err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 					if err != nil {
-						fmt.Println("ERROR:", err)
+						fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 						return
 					}
 					fmt.Println("OK")
@@ -382,9 +383,11 @@ func InitInstallCMD() *cobra.Command {
 			symlinkServerID = 0
 
 			if len(game) == 0 {
-				fmt.Println("Explicit declare a game first.")
+
+				fmt.Println(status.CLIInstallExplicitlyDeclareWhichGameToInstall.WriteDetail(""))
 				return
 			}
+
 			result := dpkg.FindGame(game)
 			if result == nil {
 				fmt.Println("Unable to find the game.")
@@ -393,10 +396,11 @@ func InitInstallCMD() *cobra.Command {
 
 			generateServerDirectory := func(serverID uint) {
 				thisServerDirectory, thisConfigDirectory, thisLogDirectory := makeDirString(serverID)
+				fmt.Println()
 				fmt.Printf("Creating log directory...")
 				err := os.Mkdir(thisLogDirectory, os.ModePerm)
 				if err != nil {
-					fmt.Println("ERROR:", err)
+					fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 					return
 				}
 				fmt.Println("OK")
@@ -404,7 +408,7 @@ func InitInstallCMD() *cobra.Command {
 				fmt.Printf("Creating server directory...")
 				err = os.Mkdir(thisServerDirectory, os.ModePerm)
 				if err != nil {
-					fmt.Println("ERROR:", err)
+					fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 					return
 				}
 				fmt.Println("OK")
@@ -412,7 +416,7 @@ func InitInstallCMD() *cobra.Command {
 				fmt.Printf("Creating config directory...")
 				err = os.Mkdir(thisConfigDirectory, os.ModePerm)
 				if err != nil {
-					fmt.Println("ERROR:", err)
+					fmt.Println(status.CLIInstallServerDirectoryAlreadyExist.WriteDetail(err))
 					return
 				}
 				fmt.Println("OK")

@@ -1,6 +1,9 @@
 package status
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type Code int
 
@@ -9,9 +12,6 @@ var (
 )
 
 func New(e int, msg string) Code {
-	if e <= 0 {
-		panic("Reversed, and not allowed.")
-	}
 	return add(e, msg)
 }
 
@@ -28,9 +28,20 @@ func ToCode(e int) Code { return Code(e) }
 
 func (e Code) ToInt() int { return int(e) }
 
-func Message(e int) string {
-	if msg, ok := _message[e]; ok {
+func (e Code) Message() string {
+	if msg, ok := _message[e.ToInt()]; ok {
 		return msg
 	}
-	return "Unknown Error"
+	return "Unknown Error code."
+}
+
+func (e Code) WriteDetail(detail interface{}) string {
+	ret := make(map[string]interface{})
+	ret["code"] = e
+	ret["message"] = e.Message()
+	if detail != nil {
+		ret["detail"] = detail
+	}
+	output, _ := json.MarshalIndent(&ret, "", "    ") // we force 4 space rather than \t
+	return string(output)
 }
