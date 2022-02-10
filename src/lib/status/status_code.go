@@ -77,6 +77,9 @@ var (
 	ServerSearchingCoordinator                   = New(100008, "Searching coordinator")
 	ServerFoundCoordinatorConnecting             = New(100009, "Found a coordinator, connecting")
 	ServerConnectedCoordinatorAndLoggingIn       = New(100010, "Connected to the coordinator, logging in")
+	ServerExited                                 = New(100011, "Server Exited.")
+	ServerUpdating                               = New(100012, "Server updating")
+	ServerRestarting                             = New(100013, "Server restarting")
 
 	// 200000~299999: Coordinator
 	CoordinatorStarting                           = New(200000, "Starting coordinator")

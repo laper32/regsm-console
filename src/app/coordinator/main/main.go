@@ -95,28 +95,37 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		switch role {
 		case "cli":
 			whatToDo := detail["command"].(string)
-			switch whatToDo {
-			case "attach":
-			case "restart":
-			case "send":
-				serverID := uint(detail["server_id"].(float64))
-				thisActor := hub.actors[serverID]
-				if thisActor == nil {
-					log.Info(status.CoordinatorServerOffline.WriteDetail(""))
-					conn.Close()
-					return
-				}
-				thisActor.io.input <- msg
-			case "stop":
-			case "update":
-			default:
-				log.Error(fmt.Sprintf("Unknwon command \"%v\"", whatToDo))
-				// TODO:
-				// 	1. Send back to the CLI connection.
-				// 	2. Terminate this connection.
-				// conn.Close()
+			serverID := uint(detail["server_id"].(float64))
+			thisActor := hub.actors[serverID]
+			if thisActor == nil {
+				log.Info(status.CoordinatorServerOffline.WriteDetail(""))
+				conn.Close()
 				return
 			}
+			thisActor.io.input <- msg
+			switch whatToDo {
+			case "attach":
+
+				// If we are now attaching the server session
+				// What we need to do is: retrieve the output message
+				// and send to the CLI's console
+				for {
+					_, input, err := conn.ReadMessage()
+					if err != nil {
+						return
+					}
+					thisActor.io.input <- input
+
+					output := <-thisActor.io.output
+					conn.WriteMessage(websocket.TextMessage, output)
+				}
+			case "stop":
+				hub.unregister <- thisActor
+			default:
+				conn.Close()
+				return
+			}
+			return
 		case "coordinator":
 			return
 		case "server":
@@ -128,7 +137,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			actor.identity["server_id"] = serverID
-			actor.identity["daemon_pid"] = int(detail["daemon_pid"].(float64))
 		default:
 			log.Error(fmt.Sprintf("Terminating this connection due to the unknown role: %v", role))
 			conn.Close()
@@ -191,7 +199,8 @@ func (actor *Actor) read() {
 			log.Info(fmt.Sprintf("Actor: %v (%v) disconnected.", actor.identity["server_id"], actor.role))
 			break
 		}
-		fmt.Println(string(msg))
+
+		actor.io.output <- msg
 	}
 }
 
@@ -199,6 +208,7 @@ func (actor *Actor) write() {
 	tick := time.NewTicker(pingPeriod)
 	defer func() {
 		tick.Stop()
+		hub.unregister <- actor
 		actor.conn.Close()
 	}()
 	for {

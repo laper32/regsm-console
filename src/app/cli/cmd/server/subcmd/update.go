@@ -15,15 +15,11 @@ func InitUpdateCMD() *cobra.Command {
 	update := &cobra.Command{
 		Use: "update",
 		Run: func(cmd *cobra.Command, args []string) {
-			// Step:
-			// 	1. Find this server from server_info.json
-			// 	2. Check its relationship
-			// 		1. If, this server does not related to any servers, then update it directly
-			// 		2. If, this server does related to some servers, then we found its root server.
-			// 	And we update this root server.
-			// 		(Noting that in this term all servers except root server with update related configs
-			// 		are all disabled.)
-			// 	3. Update. (In fact the remaining are quite similar to installation.)
+			// Procedure:
+			// 1. Stop current running server (Gracefully).
+			// 2. When server stopped, obtain current server directories(log, config, distributed, etc)
+			// 3. Check whether allowed update, if allowed then continue, otherwise stop.
+			// 4. Update server according the installation method.
 
 			thisServer := dpkg.FindIdentifiedServer(serverID)
 			if thisServer == nil {
