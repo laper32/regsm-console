@@ -42,6 +42,6 @@ func (e Code) WriteDetail(detail interface{}) string {
 	if detail != nil {
 		ret["detail"] = detail
 	}
-	output, _ := json.MarshalIndent(&ret, "", "    ") // we force 4 space rather than \t
+	output, _ := json.Marshal(&ret) // we force 4 space rather than \t
 	return string(output)
 }

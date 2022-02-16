@@ -121,11 +121,11 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 				}
 			case "stop":
 				hub.unregister <- thisActor
+				return
 			default:
 				conn.Close()
 				return
 			}
-			return
 		case "coordinator":
 			return
 		case "server":
@@ -145,26 +145,52 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		for k := range data {
 			delete(data, k)
 		}
+
 		data["role"] = "coordinator"
 		data["code"] = status.OK
 		data["message"] = status.OK.Message()
+		fmt.Println(data)
 		actor.conn.WriteJSON(&data)
-		actor.conn.ReadJSON(&data)
-		responseStatus := status.ToCode(int(data["code"].(float64)))
-		if responseStatus == status.OK {
-			detail = data["detail"].(map[string]interface{})
-			if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
-				// This should not happen.
-				return
-			}
-			hub.register <- actor
-			log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
-		} else {
-			hub.unregister <- actor
+		// ...
+		// 我草
+		// 为啥啊
+		// 为啥在struct里面的conn就没办法读消息 裸conn就可以正常拿到消息?
+		// =========================这段是可以取到消息的
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			fmt.Println("ERROR:", err)
 			return
 		}
-		go actor.read()
-		go actor.write()
+		fmt.Println(string(msg))
+		// 下面的都不行
+
+		// for k := range data {
+		// 	delete(data, k)
+		// }
+		// _, msg, _ := actor.conn.ReadMessage()
+		// fmt.Println(string(msg))
+		// if data["code"] == nil {
+		// 	fmt.Println("Why...the code is null?")
+		// 	return
+		// }
+		// responseStatus := int(data["code"].(float64))
+		// // responseStatus := status.ToCode(int(data["code"].(float64)))
+		// if responseStatus == status.OK.ToInt() {
+		// 	detail = data["detail"].(map[string]interface{})
+		// 	if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
+		// 		// This should not happen.
+		// 		return
+		// 	}
+		// 	hub.register <- actor
+		// 	log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
+		// } else {
+		// 	fmt.Println("Aborting this connection since the message received is incorrect. IP:", actor.conn.RemoteAddr().String())
+		// 	fmt.Println("Message:", data)
+		// 	hub.unregister <- actor
+		// 	return
+		// }
+		// go actor.read()
+		// go actor.write()
 	} else {
 		// Unknown.
 		// Terminate this connection
@@ -178,8 +204,10 @@ func (h *Hub) run() {
 		case actor := <-h.register:
 			serverID := actor.identity["server_id"].(uint)
 			h.actors[serverID] = actor
+			fmt.Printf("Actor: %v (Role: %v) connected.\n", serverID, actor.role)
 		case actor := <-h.unregister:
 			serverID := actor.identity["server_id"].(uint)
+			fmt.Printf("Actor: %v (Role: %v) disconnected.\n", serverID, actor.role)
 			delete(h.actors, serverID)
 		}
 	}
