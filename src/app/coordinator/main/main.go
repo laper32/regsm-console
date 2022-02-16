@@ -151,46 +151,32 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		data["message"] = status.OK.Message()
 		fmt.Println(data)
 		actor.conn.WriteJSON(&data)
-		// ...
-		// 我草
-		// 为啥啊
-		// 为啥在struct里面的conn就没办法读消息 裸conn就可以正常拿到消息?
-		// =========================这段是可以取到消息的
-		_, msg, err := conn.ReadMessage()
+
+		for k := range data {
+			delete(data, k)
+		}
+		err := actor.conn.ReadJSON(&data)
 		if err != nil {
 			fmt.Println("ERROR:", err)
 			return
 		}
-		fmt.Println(string(msg))
-		// 下面的都不行
-
-		// for k := range data {
-		// 	delete(data, k)
-		// }
-		// _, msg, _ := actor.conn.ReadMessage()
-		// fmt.Println(string(msg))
-		// if data["code"] == nil {
-		// 	fmt.Println("Why...the code is null?")
-		// 	return
-		// }
-		// responseStatus := int(data["code"].(float64))
-		// // responseStatus := status.ToCode(int(data["code"].(float64)))
-		// if responseStatus == status.OK.ToInt() {
-		// 	detail = data["detail"].(map[string]interface{})
-		// 	if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
-		// 		// This should not happen.
-		// 		return
-		// 	}
-		// 	hub.register <- actor
-		// 	log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
-		// } else {
-		// 	fmt.Println("Aborting this connection since the message received is incorrect. IP:", actor.conn.RemoteAddr().String())
-		// 	fmt.Println("Message:", data)
-		// 	hub.unregister <- actor
-		// 	return
-		// }
-		// go actor.read()
-		// go actor.write()
+		responseStatus := int(data["code"].(float64))
+		if responseStatus == status.OK.ToInt() {
+			detail = data["detail"].(map[string]interface{})
+			if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
+				// This should not happen.
+				return
+			}
+			hub.register <- actor
+			log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
+		} else {
+			fmt.Println("Aborting this connection since the message received is incorrect. IP:", actor.conn.RemoteAddr().String())
+			fmt.Println("Message:", data)
+			hub.unregister <- actor
+			return
+		}
+		go actor.read()
+		go actor.write()
 	} else {
 		// Unknown.
 		// Terminate this connection
