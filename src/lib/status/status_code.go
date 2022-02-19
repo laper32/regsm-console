@@ -80,6 +80,7 @@ var (
 	ServerExited                                 = New(100011, "Server Exited.")
 	ServerUpdating                               = New(100012, "Server updating")
 	ServerRestarting                             = New(100013, "Server restarting")
+	ServerTerminateAttachConsole                 = New(100014, "Terminate attach console")
 
 	// 200000~299999: Coordinator
 	CoordinatorStarting                           = New(200000, "Starting coordinator")

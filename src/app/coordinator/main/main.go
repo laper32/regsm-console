@@ -112,6 +112,13 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 				for {
 					_, input, err := conn.ReadMessage()
 					if err != nil {
+						data["role"] = "coordinator"
+						data["code"] = status.ServerTerminateAttachConsole
+						data["message"] = status.ServerTerminateAttachConsole.Message()
+						detail["server_id"] = thisActor.identity["server_id"]
+						data["detail"] = detail
+						msg, _ := json.Marshal(data)
+						thisActor.io.input <- msg
 						return
 					}
 					thisActor.io.input <- input

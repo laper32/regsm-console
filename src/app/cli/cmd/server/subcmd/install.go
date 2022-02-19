@@ -181,10 +181,6 @@ func InitInstallCMD() *cobra.Command {
 					}
 				}
 
-				// pushNewServer := func() {
-				// 	dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
-				// }
-
 				if !misc.Agree && misc.Decline {
 					return
 				}
@@ -308,15 +304,13 @@ func InitInstallCMD() *cobra.Command {
 					}
 					return false
 				}()
-
-				pushNewServer := func() {
+				if !canReuseID {
 					thisServer = &dpkg.ServerIdentity{
 						ID:              uint(len(dpkg.ServerIdentityList)) + 1,
 						Game:            game,
 						Deleted:         false,
 						SymlinkServerID: symlinkServerID,
 					}
-					dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 				}
 
 				if !misc.Agree && misc.Decline {
@@ -354,12 +348,10 @@ func InitInstallCMD() *cobra.Command {
 				}
 
 				start := time.Now()
-				if canReuseID {
-					dpkg.UpdateServerIdentity()
-				} else {
-					pushNewServer()
-					dpkg.UpdateServerIdentity()
+				if !canReuseID {
+					dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 				}
+				dpkg.UpdateServerIdentity()
 
 				fmt.Printf("Generating server directories...")
 				generateServerDirectory(thisServer.ID)
@@ -381,9 +373,9 @@ func InitInstallCMD() *cobra.Command {
 
 			// Newly installed server, we set 0 to avoid mistyping
 			symlinkServerID = 0
+			fmt.Println("Newly installed server.")
 
 			if len(game) == 0 {
-
 				fmt.Println(status.CLIInstallExplicitlyDeclareWhichGameToInstall.WriteDetail(""))
 				return
 			}
@@ -437,15 +429,13 @@ func InitInstallCMD() *cobra.Command {
 				}
 				return false
 			}()
-
-			pushNewServer := func() {
+			if !canReuseID {
 				thisServer = &dpkg.ServerIdentity{
 					ID:              uint(len(dpkg.ServerIdentityList)) + 1,
 					Game:            game,
 					Deleted:         false,
 					SymlinkServerID: symlinkServerID,
 				}
-				dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 			}
 
 			if !misc.Agree && misc.Decline {
@@ -481,12 +471,10 @@ func InitInstallCMD() *cobra.Command {
 			}
 
 			start := time.Now()
-			if canReuseID {
-				dpkg.UpdateServerIdentity()
-			} else {
-				pushNewServer()
-				dpkg.UpdateServerIdentity()
+			if !canReuseID {
+				dpkg.ServerIdentityList = append(dpkg.ServerIdentityList, *thisServer)
 			}
+			dpkg.UpdateServerIdentity()
 
 			fmt.Printf("Generating server directories...")
 			generateServerDirectory(thisServer.ID)
