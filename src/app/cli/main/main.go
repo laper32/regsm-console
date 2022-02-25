@@ -83,9 +83,7 @@ func initializeEnv() {
 }
 
 func initializeModule() {
-
 	cfg := conf.Init()
-
 	log.Init(cfg.Log)
 }
 

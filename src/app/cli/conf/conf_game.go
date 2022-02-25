@@ -43,7 +43,7 @@ func WriteGameConfigField(cfg *viper.Viper, whatGame string) {
 	// of max players, will you even trust what they are saying? No, isn't it?
 	// So, the maxplayer becomes the default configuration param.
 	// But to shut these guys mouse up, we define -1 as unlimited max players.
-	conf.TestOrInsert(cfg, "server.maxplayer", -1)
+	conf.TestOrInsert(cfg, "server.maxplayer", 24)
 
 	// Allow update when we want to update the server
 	// We define this field in order to prevent some case (especially imported server)
@@ -71,26 +71,8 @@ func WriteGameConfigField(cfg *viper.Viper, whatGame string) {
 	// -1 means infinity.
 	conf.TestOrInsert(cfg, "server.max_restart_count", -1)
 
-	// The maximum retry count.
-	// Shared for both following two configurations.
-	conf.TestOrInsert(cfg, "coordinator.retry_count", 5)
-
-	// Determine whether should we allow retry when starting up the server.
-	// This is used by the case that when we cannot establish connection to the coordinator,
-	// we met some trouble of opening the daemon executable, etc.
-	// Overall, this is to determine that what should we do when we cannot starting up the server
-	// correctly.
-	conf.TestOrInsert(cfg, "coordinator.allow_retry_at_startup", true)
-
-	// Determine whether should we allow trying to reconnect to the coordinator once it has been
-	// disconnected.
-	// This is used for the case when the coordinator offline, there are some issues of current
-	// daemon's websocket connection, etc.
-	// If we cannot reconnect to the coordinator, then everything will be stored as a local file.
-	// Once we have been reconnected to the coordinator, the data will be packed, and send to the
-	// coordinator.
-	// Noting that if disconnected, everything what is related to the coordinator ARE ALL DISABLED!
-	conf.TestOrInsert(cfg, "coordinator.allow_reconnect_when_running", true)
+	// Maximum retry count for connecting to the coordinator.
+	conf.TestOrInsert(cfg, "server.max_retry_coordinator_startup_connection_count", 5)
 
 	WriteGameConfigSpecial(cfg, whatGame)
 }

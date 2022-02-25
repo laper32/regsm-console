@@ -19,6 +19,8 @@ func TestOrInsert(cfg *viper.Viper, key string, value interface{}) {
 
 	if !cfg.IsSet(key) {
 		cfg.Set(key, value)
+	} else {
+		return
 	}
 }
 

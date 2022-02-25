@@ -65,6 +65,16 @@ var (
 	// 11000~11999: gsm server search
 	CLISearchUnableToSearchServer = New(11000, "Unable to search the server")
 
+	// 12000~12999: gsm coordinator start
+	CLICoordinatorUnableStartCoordinator = New(12000, "Unable to start the coordinator")
+
+	// 13000~13999: gsm coordinator stop
+	CLICoordinatorUnableStopCoordinator = New(13000, "Unable to stop the coordinator")
+	CLICoordinatorSendStopSignal        = New(13001, "Send stop signal")
+
+	// 14000~14999: gsm coordinator restart
+	CLICoordinatorUnableRestartCoordinator = New(14000, "Unable to restart the coordinator")
+
 	// 100000~199999: Server
 	ServerStartingInteractiveProcess             = New(100000, "Starting interactive process")
 	ServerStoppingInteractiveProcess             = New(100001, "Stopping interactive process")
@@ -81,6 +91,7 @@ var (
 	ServerUpdating                               = New(100012, "Server updating")
 	ServerRestarting                             = New(100013, "Server restarting")
 	ServerTerminateAttachConsole                 = New(100014, "Terminate attach console")
+	ServerSendingProcessInfo                     = New(100015, "Sending process info")
 
 	// 200000~299999: Coordinator
 	CoordinatorStarting                           = New(200000, "Starting coordinator")

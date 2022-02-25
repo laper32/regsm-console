@@ -42,21 +42,41 @@ func InitUpdateCMD() *cobra.Command {
 					installVia := gameData.Specific["install_via"]
 					if installVia == "steamcmd" {
 						appid, modName, custom := int64(gameData.Specific["appid"].(float64)), "", ""
+						handleUpdate := func() {
+							if value, ok := gameData.Specific["mod"].(string); ok {
+								modName = value
+							}
 
-						if value, ok := gameData.Specific["mod"].(string); ok {
-							modName = value
+							if value, ok := gameData.Specific["custom"]; ok {
+								custom = value.(string)
+							}
+
+							var platformList []string
+							for _, this := range gameData.Specific["platform"].([]interface{}) {
+								platformList = append(platformList, this.(string))
+							}
+
+							dpkg.SteamCMDInstall(platformList, serverDirectory, appid, modName, true, custom)
 						}
-
-						if value, ok := gameData.Specific["custom"]; ok {
-							custom = value.(string)
+						latestBuild := dpkg.CheckLatestBuild(appid)
+						localBuild, err := dpkg.CheckLocalBuild(serverID, appid)
+						if err != nil {
+							fmt.Println("Seems that appmanifest file has been corrupted.")
+							fmt.Println("Forcely update the server.")
+							fmt.Println("If this message occurs multiple times, please contact for supportance.")
+							fmt.Println("Error message:", err)
+							handleUpdate()
+							return
 						}
-
-						var platformList []string
-						for _, this := range gameData.Specific["platform"].([]interface{}) {
-							platformList = append(platformList, this.(string))
+						fmt.Println("Local build:", localBuild)
+						fmt.Println("Latest build:", latestBuild)
+						if latestBuild != localBuild {
+							fmt.Println("Difference detected.")
+							fmt.Println("Starting update.")
+							handleUpdate()
+							return
 						}
-
-						dpkg.SteamCMDInstall(platformList, serverDirectory, appid, modName, true, custom)
+						fmt.Println("Current build is latest. No further action needed.")
 					}
 				}
 			}
@@ -71,7 +91,7 @@ func InitUpdateCMD() *cobra.Command {
 				})
 				allowUpdate := cfg.GetBool("server.allow_update")
 				if !allowUpdate {
-					fmt.Println("ERROR: This server does not allow update.")
+					fmt.Println("This server does not allow update.")
 					return
 				}
 

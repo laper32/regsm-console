@@ -10,8 +10,8 @@
       - [ ] status
     - [ ] server
       - [x] start
-      - [ ] stop
-      - [ ] restart
+      - [x] stop
+      - [x] restart
       - [x] update
       - [x] remove
       - [x] send

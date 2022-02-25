@@ -1,2 +1,5 @@
-[Test.Section1]
-Value="Str"
+
+[test]
+
+  [test.section1]
+    value = "Str"

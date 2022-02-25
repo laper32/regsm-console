@@ -125,10 +125,10 @@ func InitInstallCMD() *cobra.Command {
 					// 	If you want to implement error, you will get this massive of shit.
 					// Or just os.Mkdir, balabala.
 					// 	Why we just only link server files, but log and config still mkdir?
-					// Well...logging, I think I don't have to say anything
+					// Well...logging, I think I don't have to say anything about it.
 					// 	But config, yes, we can say everything are same. But however, we also
 					// need to modify something like: Port...
-					// In this term, we have to mkdir rather create a symlink......
+					// In this term, we have to mkdir rather than create a symlink......
 					// 	There still also has a solution to handle this case, but this is restricted
 					// in commercial version.
 					fmt.Printf("Creating log directory...")
@@ -157,7 +157,7 @@ func InitInstallCMD() *cobra.Command {
 				}
 
 				// Check the info of reuse id
-				// If we have found the id reuse, then we will modify the wrapper to this deleted server.
+				// If we have found the id can reuse (aka deleted), then we will modify the wrapper to this deleted server.
 
 				canReuseID := func() bool {
 					for i, this := range dpkg.ServerIdentityList {

@@ -5,6 +5,18 @@ import (
 	"testing"
 )
 
+func TestNotModify(t *testing.T) {
+	cfg := Load(&Config{
+		Name: "config.toml",
+		Type: "toml",
+		Path: []string{"."},
+	})
+	TestOrInsert(cfg, "Test.Section1.Value", 3484)
+	cfg.WriteConfigAs(cfg.ConfigFileUsed())
+	// TestOrInsert2(cfg, "Test.Section1.Value", 3484)
+	// cfg.WriteConfigAs(cfg.ConfigFileUsed())
+}
+
 func TestLoadJSON(t *testing.T) {
 	conf := &Config{
 		Name: "config",

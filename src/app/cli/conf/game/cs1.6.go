@@ -13,13 +13,14 @@ func CS16ConfigField(cfg *viper.Viper) {
 	conf.TestOrInsert(cfg, "server.special.gslt", "")
 
 	// Hmmm? Need I explain?
-	conf.TestOrInsert(cfg, "server.special.default_map", "")
+	conf.TestOrInsert(cfg, "server.special.default_map", "de_dust2")
 
 	// We put in param in the specific game, because different game has different parameters.
 	// These are all default parameters, but you can modify it when we saved on disk.
-	conf.TestOrInsert(cfg, "server.param", []string{
-		"-console ", "-game cstrike",
+	cfg.Set("server.param", []string{
+		"-console", "-game cstrike",
 	})
+
 }
 
 func CS16StartupConfig(cfg *viper.Viper) {

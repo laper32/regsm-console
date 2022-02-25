@@ -1,9 +1,19 @@
 package subcmd
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/gorilla/websocket"
+	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
+	"github.com/laper32/regsm-console/src/app/cli/misc"
+	"github.com/laper32/regsm-console/src/lib/log"
+	"github.com/laper32/regsm-console/src/lib/status"
+	"github.com/spf13/cobra"
+)
 
 func InitStopCMD() *cobra.Command {
-	var recursive string
+	// var recursive string
 	stop := &cobra.Command{
 		Use: "stop",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -29,21 +39,64 @@ func InitStopCMD() *cobra.Command {
 			// Everything will be manipulated on net, in other words, if it fails to shut down, then
 			// shut down process will fail (that you should check connections.)
 			// 	2. Shut down coordinator.
-
-			if recursive == "all" {
-				return
-			} else if recursive == "server" {
-				return
-			} else if recursive == "coordinator" {
-				return
-			} else if recursive == "none" {
-				return
-			} else {
+			cfg, err := cliconf.CoordinatorConfiguration()
+			if err != nil {
+				fmt.Println("ERROR:", err)
 				return
 			}
+			url := &url.URL{
+				Scheme: "ws",
+				Host:   fmt.Sprintf("%v:%v", cfg.GetString("coordinator.ip"), cfg.GetUint("coordinator.port")),
+			}
+			fmt.Printf("[%v] Connecting to the coordinator...", url.String())
+			conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+			if err != nil {
+				fmt.Println()
+				log.Warn("Seems that the connection is closed. Message:", err)
+				return
+			}
+			fmt.Println("OK")
+
+			detail := make(map[string]interface{})
+			message := make(map[string]interface{})
+			message["role"] = misc.Role
+			// 设计失误
+			// 连接红蓝字应该是全局的 但我当时没考虑到
+			// 2.0会重新设计
+			message["code"] = status.CLICoordinatorSendStopSignal
+			message["message"] = status.CLICoordinatorSendStopSignal.Message()
+			message["detail"] = detail
+
+			defer conn.Close()
+			fmt.Printf("Sending message...")
+			err = conn.WriteJSON(&message)
+			if err != nil {
+				fmt.Println()
+				log.Warn("There are some issues on sending message to the coordinator. Message:", err)
+				return
+			}
+			fmt.Println("OK")
+			/*
+				conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+				if err != nil {
+					fmt.Println()
+					log.Error(err)
+					return
+				}
+				fmt.Println("OK")
+				defer conn.Close()
+				fmt.Printf("Sending message...")
+				err = conn.WriteJSON(&message)
+				if err != nil {
+					fmt.Println()
+					log.Error(err)
+					return
+				}
+				fmt.Println("OK")
+			*/
 		},
 	}
-	stop.Flags().StringVar(&recursive, "recursive", "none", "Recursively stopping servers.")
-	stop.Flags().Lookup("recursive").NoOptDefVal = "none"
+	// stop.Flags().StringVar(&recursive, "recursive", "none", "Recursively stopping servers.")
+	// stop.Flags().Lookup("recursive").NoOptDefVal = "none"
 	return stop
 }

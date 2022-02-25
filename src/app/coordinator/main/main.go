@@ -11,8 +11,9 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/laper32/regsm-console/src/app/cli/conf"
+	cliconf "github.com/laper32/regsm-console/src/app/coordinator/conf"
 	"github.com/laper32/regsm-console/src/lib/log"
+	"github.com/laper32/regsm-console/src/lib/os/shutil"
 	"github.com/laper32/regsm-console/src/lib/status"
 )
 
@@ -26,6 +27,13 @@ const (
 	// Send pings to peer with this period. Must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
 )
+
+type RetGram struct {
+	Role    string                 `json:"role"`
+	Code    int                    `json:"code"`
+	Message string                 `json:"message"`
+	Detail  map[string]interface{} `json:"detail"`
+}
 
 type Actor struct {
 	role     string
@@ -76,6 +84,9 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	detail := data["detail"].(map[string]interface{})
 	var actor *Actor
 	statusCode := int(data["code"].(float64))
+	if statusCode == status.CLICoordinatorSendStopSignal.ToInt() {
+		os.Exit(0)
+	}
 	// 设计失误
 	// 连接红蓝字应该是全局的 但我当时没考虑到
 	// 2.0会重新设计
@@ -127,7 +138,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 					conn.WriteMessage(websocket.TextMessage, output)
 				}
 			case "stop":
-				hub.unregister <- thisActor
 				return
 			default:
 				conn.Close()
@@ -217,11 +227,37 @@ func (actor *Actor) read() {
 		_, msg, err := actor.conn.ReadMessage()
 		if err != nil {
 			hub.unregister <- actor
-			log.Info(fmt.Sprintf("Actor: %v (%v) disconnected.", actor.identity["server_id"], actor.role))
 			break
 		}
 
-		actor.io.output <- msg
+		// We unmarshal it, no error => it's JSON indeed.
+		// Then we should do further actions.
+		var retGram *RetGram
+		if err = json.Unmarshal(msg, &retGram); err == nil {
+			switch retGram.Role {
+			case "server":
+				serverID := uint(retGram.Detail["server_id"].(float64))
+				thisActor := hub.actors[serverID]
+				switch retGram.Code {
+				case status.ServerSendingProcessInfo.ToInt():
+					serverPID := int(retGram.Detail["server_pid"].(float64))
+					daemonPID := int(retGram.Detail["daemon_pid"].(float64))
+					thisActor.identity["server_pid"] = serverPID
+					thisActor.identity["daemon_pid"] = daemonPID
+					continue
+				case status.ServerStopping.ToInt():
+					hub.unregister <- thisActor
+					return
+				default:
+					continue
+				}
+			case "coordinator":
+			default:
+				continue
+			}
+		} else {
+			actor.io.output <- msg
+		}
 	}
 }
 
@@ -249,9 +285,12 @@ func (actor *Actor) write() {
 }
 
 func main() {
-	cfg := conf.Init()
+	shutil.ClearTerminalScreen()
+
+	cfg := cliconf.Init()
 	log.Init(cfg.Log)
+
 	go hub.run()
 	http.HandleFunc("/", wsHandle)
-	http.ListenAndServe(fmt.Sprintf("%v:%v", os.Args[1], os.Args[2]), nil)
+	http.ListenAndServe(fmt.Sprintf("%v:%v", cfg.Param.IP, cfg.Param.Port), nil)
 }

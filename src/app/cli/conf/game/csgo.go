@@ -9,17 +9,19 @@ import (
 
 func CSGOConfigField(cfg *viper.Viper) {
 	conf.TestOrInsert(cfg, "server.special.gslt", "")
-	conf.TestOrInsert(cfg, "server.special.default_map", "")
+	conf.TestOrInsert(cfg, "server.special.default_map", "de_dust2")
 	// We only provides default config
 	// You should make further configruation by yourself, rather than us.
-	conf.TestOrInsert(cfg, "server.param", []string{
+	cfg.Set("server.param", []string{
 		"-console", "-game csgo", "+game_type 0", "+game_mode 0",
 		"+mapgroup mg_active", "-tickrate 64", "-usercon",
 	})
+	// conf.TestOrInsert(cfg, "server.param", []string{
+	// })
 }
 
 func CSGOStartupConfig(cfg *viper.Viper) {
-	paramList := cfg.Get("server.param").([]string)
+	paramList := cfg.GetStringSlice("server.param")
 	GSLTToken := cfg.GetString("server.special.gslt")
 	defaultMap := cfg.GetString("server.special.default_map")
 	ip := cfg.GetString("server.ip")

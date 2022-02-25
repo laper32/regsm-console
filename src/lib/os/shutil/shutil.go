@@ -5,7 +5,9 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
+	"runtime"
 )
 
 // CopyFile: copies a single file from src to dst
@@ -66,4 +68,22 @@ func CopyDir(src string, dst string) error {
 		}
 	}
 	return nil
+}
+
+func ClearTerminalScreen() {
+	switch runtime.GOOS {
+	case "windows":
+		// I know, we have powershell
+		// But we need to ensure that it's compatible for all Windows related system (xp, vista, 7, 2008, 2012, ...).
+		// aka, cmd is the only solution.
+		cmd := exec.Command("cmd", "/c", "cls")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	case "linux":
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		cmd.Run()
+	default:
+		panic(fmt.Sprintf("Currently OS is not supported. OS: \"%v\"", runtime.GOOS))
+	}
 }

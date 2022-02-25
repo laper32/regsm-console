@@ -32,7 +32,7 @@ func CoordinatorConfiguration() (*viper.Viper, error) {
 		Path: []string{configDirectory},
 	})
 	WriteCoordinatorConfigField(cfg)
-	err := cfg.WriteConfig()
+	err := cfg.WriteConfigAs(cfg.ConfigFileUsed())
 	if err != nil {
 		return nil, fmt.Errorf("%v", err)
 	}

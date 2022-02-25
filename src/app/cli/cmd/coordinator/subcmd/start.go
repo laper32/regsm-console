@@ -26,48 +26,47 @@ func InitStartCMD() *cobra.Command {
 
 			// If windows: gsm-coordinator.exe
 			// otherwise gsm-coordinator
-			cfg, err := cliconf.CoordinatorConfiguration()
+			_, err := cliconf.CoordinatorConfiguration()
 			if err != nil {
 				fmt.Println("ERROR:", err)
 				return
 			}
 			exedir := fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH"))
-			passin := []string{
-				exedir,
-				cfg.GetString("coordinator.ip"), fmt.Sprintf("%v", cfg.GetUint("coordinator.port")),
-				fmt.Sprintf("%v", cfg.GetBool("coordinator.pure")), cfg.GetString("coordinator.other_coordinator_address"),
-			}
-
 			exe := &exec.Cmd{
 				Path:   exedir,
 				Dir:    os.Getenv("GSM_PATH"),
 				Env:    os.Environ(),
-				Args:   passin,
-				Stdin:  os.Stdin,
-				Stdout: os.Stdout,
 				Stderr: os.Stderr,
+				Stdout: os.Stdout,
 			}
 			exe.Run()
 
 			// How could we know when the coordinator starts failed?
 			// start := make(chan bool)
+			// var pid int
 			// go func() {
-			// 	cmd := &exec.Cmd{
+			// 	exe := &exec.Cmd{
 			// 		Path: exedir,
 			// 		Dir:  os.Getenv("GSM_PATH"),
 			// 		Env:  os.Environ(),
-			// 		Args: []string{fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH")), cfg.GetString("coordinator.ip"), string(cfg.GetUint("coordinator.port"))},
 			// 	}
-			// 	err := cmd.Start()
+			// 	err = exe.Start()
 			// 	if err != nil {
 			// 		fmt.Println("ERROR:", err)
 			// 		start <- false
 			// 		return
 			// 	}
-			// 	fmt.Println("Coordinator has been started. Process ID:", cmd.Process.Pid)
+			// 	pid = exe.Process.Pid
 			// 	start <- true
 			// }()
-			// <-start
+			// result := <-start
+			// if result {
+			// 	fmt.Println("Coordinator started. Process ID:", pid)
+			// 	return
+			// } else {
+			// 	fmt.Println("Coordinator starting failed. Message:", err)
+			// 	return
+			// }
 		},
 	}
 
