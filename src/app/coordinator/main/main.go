@@ -1,9 +1,12 @@
 // windows: go build -o gsm-coordinator.exe
 // linux: go build -o gsm-coordinator
-
+/*
+curl --include --no-buffer --header "Connection: Upgrade" --header "Upgrade: websocket" --header "Host: example.com:80" --header "Origin: http://example.com:80" --header "Sec-WebSocket-Key: SGVsbG8sIHdvcmxkIQ==" --header "Sec-WebSocket-Version: 13" http://example.com:80/
+*/
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,7 +28,7 @@ const (
 	pongWait = 10 * time.Second
 
 	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	pingPeriod = (pongWait * 1) / 10
 )
 
 type RetGram struct {
@@ -116,7 +119,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 			thisActor.io.input <- msg
 			switch whatToDo {
 			case "attach":
-
 				// If we are now attaching the server session
 				// What we need to do is: retrieve the output message
 				// and send to the CLI's console
@@ -137,8 +139,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 					output := <-thisActor.io.output
 					conn.WriteMessage(websocket.TextMessage, output)
 				}
-			case "stop":
-				return
 			default:
 				conn.Close()
 				return
@@ -166,7 +166,6 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		data["role"] = "coordinator"
 		data["code"] = status.OK
 		data["message"] = status.OK.Message()
-		fmt.Println(data)
 		actor.conn.WriteJSON(&data)
 
 		for k := range data {
@@ -174,7 +173,7 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 		}
 		err := actor.conn.ReadJSON(&data)
 		if err != nil {
-			fmt.Println("ERROR:", err)
+			log.Error(err)
 			return
 		}
 		responseStatus := int(data["code"].(float64))
@@ -207,10 +206,9 @@ func (h *Hub) run() {
 		case actor := <-h.register:
 			serverID := actor.identity["server_id"].(uint)
 			h.actors[serverID] = actor
-			fmt.Printf("Actor: %v (Role: %v) connected.\n", serverID, actor.role)
 		case actor := <-h.unregister:
 			serverID := actor.identity["server_id"].(uint)
-			fmt.Printf("Actor: %v (Role: %v) disconnected.\n", serverID, actor.role)
+			actor.conn.Close()
 			delete(h.actors, serverID)
 		}
 	}
@@ -218,6 +216,7 @@ func (h *Hub) run() {
 
 func (actor *Actor) read() {
 	defer func() {
+		fmt.Println("Stop the connection since ping-pong timed out.")
 		hub.unregister <- actor
 		actor.conn.Close()
 	}()
@@ -226,9 +225,12 @@ func (actor *Actor) read() {
 	for {
 		_, msg, err := actor.conn.ReadMessage()
 		if err != nil {
-			hub.unregister <- actor
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Error(err)
+			}
 			break
 		}
+		msg = bytes.TrimSpace(bytes.ReplaceAll(msg, []byte{'\n'}, []byte{' '}))
 
 		// We unmarshal it, no error => it's JSON indeed.
 		// Then we should do further actions.
@@ -265,13 +267,13 @@ func (actor *Actor) write() {
 	tick := time.NewTicker(pingPeriod)
 	defer func() {
 		tick.Stop()
-		hub.unregister <- actor
 		actor.conn.Close()
 	}()
 	for {
 		select {
 		case message, ok := <-actor.io.input:
 			if !ok {
+				actor.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 			actor.conn.WriteMessage(websocket.TextMessage, message)
