@@ -1,11 +1,7 @@
 package conf
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/laper32/regsm-console/src/app/cli/conf/game"
-	"github.com/laper32/regsm-console/src/app/cli/dpkg"
 	"github.com/laper32/regsm-console/src/lib/conf"
 	"github.com/spf13/viper"
 )
@@ -92,33 +88,4 @@ func WriteDefaultGameConfig(whatGame, configDirectory string) {
 	if err != nil {
 		panic(err)
 	}
-}
-
-func writeStartupArgs(v *viper.Viper) {
-	switch v.GetString("server.game") {
-	case "csgo":
-		game.CSGOStartupConfig(v)
-	case "cs1.6":
-		game.CS16StartupConfig(v)
-	}
-}
-
-func StartGameConfiguration(server *dpkg.ServerIdentity) (*viper.Viper, error) {
-	configDirectory := fmt.Sprintf("%v/config/server/%v", os.Getenv("GSM_ROOT"), server.ID)
-	cfg := conf.Load(&conf.Config{
-		Name: "config",
-		Type: "toml",
-		Path: []string{configDirectory},
-	})
-
-	// We need to update config
-	WriteGameConfigField(cfg, server.Game)
-	err := cfg.WriteConfig()
-	if err != nil {
-		fmt.Println("Unexpected occured when writing the config:", err)
-		return nil, err
-	}
-
-	writeStartupArgs(cfg)
-	return cfg, nil
 }

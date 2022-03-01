@@ -21,6 +21,7 @@ type Parameter struct {
 }
 
 func Init() *Config {
+
 	cfg := conf.Load(&conf.Config{
 		Name: "coordinator",
 		Type: "toml",

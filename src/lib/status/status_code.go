@@ -49,6 +49,7 @@ var (
 
 	// 6000~6999: gsm server send
 	CLISendUnableToSendCommandToServer = New(6000, "Failed to send command to the server")
+	CLISendingCommand                  = New(6001, "Sending command")
 
 	// 7000~7999: gsm server start
 	CLIStartUnableToStartupServer = New(7000, "Failed to startup the server")
@@ -76,22 +77,22 @@ var (
 	CLICoordinatorUnableRestartCoordinator = New(14000, "Unable to restart the coordinator")
 
 	// 100000~199999: Server
-	ServerStartingInteractiveProcess             = New(100000, "Starting interactive process")
-	ServerStoppingInteractiveProcess             = New(100001, "Stopping interactive process")
-	ServerStarting                               = New(100002, "Starting server")
-	ServerStopping                               = New(100003, "Stopping server")
-	ServerCrashed                                = New(100004, "Server crashed")
-	ServerRestartCountingDown                    = New(100005, "Restarting counting down")
-	ServerFoundLastAbnormalExitProcess           = New(100006, "Found last abnormal exit process")
-	ServerProcessExitedButInteratingProcessIsNot = New(100007, "Process has been exited but its iterating process is not")
-	ServerSearchingCoordinator                   = New(100008, "Searching coordinator")
-	ServerFoundCoordinatorConnecting             = New(100009, "Found a coordinator, connecting")
-	ServerConnectedCoordinatorAndLoggingIn       = New(100010, "Connected to the coordinator, logging in")
-	ServerExited                                 = New(100011, "Server Exited.")
-	ServerUpdating                               = New(100012, "Server updating")
-	ServerRestarting                             = New(100013, "Server restarting")
-	ServerTerminateAttachConsole                 = New(100014, "Terminate attach console")
-	ServerSendingProcessInfo                     = New(100015, "Sending process info")
+	ServerStartingInteractiveProcess       = New(100000, "Starting interactive process")
+	ServerStoppingInteractiveProcess       = New(100001, "Stopping interactive process")
+	ServerStarted                          = New(100002, "Server started")
+	ServerStopping                         = New(100003, "Stopping server")
+	ServerCrashed                          = New(100004, "Server crashed")
+	ServerRestartCountingDown              = New(100005, "Restarting counting down")
+	ServerFoundLastAbnormalExitProcess     = New(100006, "Found last abnormal exit process")
+	ServerFailedToStart                    = New(100007, "Failed to start the server")
+	ServerSearchingCoordinator             = New(100008, "Searching coordinator")
+	ServerFoundCoordinatorConnecting       = New(100009, "Found a coordinator, connecting")
+	ServerConnectedCoordinatorAndLoggingIn = New(100010, "Connected to the coordinator, logging in")
+	ServerExited                           = New(100011, "Server Exited.")
+	ServerUpdating                         = New(100012, "Server updating")
+	ServerRestarting                       = New(100013, "Server restarting")
+	ServerTerminateAttachConsole           = New(100014, "Terminate attach console")
+	ServerSendingProcessInfo               = New(100015, "Sending process info")
 
 	// 200000~299999: Coordinator
 	CoordinatorStarting                           = New(200000, "Starting coordinator")

@@ -27,7 +27,6 @@ const (
 
 	// Send pings to peer with this period. Must be less than pongWait.
 	pingPeriod = (pongWait * 1) / 10
-	Role       = "coordinator"
 )
 
 type RetGram struct {
@@ -72,24 +71,32 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 	}
 	// Read the first connect message, and resolve it.
 	// We need to know what role the connection is.
-	var retGram *RetGram
-	err = conn.ReadJSON(&retGram)
+	_, msg, err := conn.ReadMessage()
 	if err != nil {
-		log.Info(err)
+		log.Error(err)
 		return
 	}
-	if retGram.Code == status.CLICoordinatorSendStopSignal.ToInt() {
+	data := make(map[string]interface{})
+	err = json.Unmarshal(msg, &data)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+	role := data["role"].(string)
+	detail := data["detail"].(map[string]interface{})
+	var actor *Actor
+	statusCode := int(data["code"].(float64))
+	if statusCode == status.CLICoordinatorSendStopSignal.ToInt() {
 		os.Exit(0)
 	}
-	var actor *Actor
 	// 设计失误
 	// 连接红蓝字应该是全局的 但我当时没考虑到
 	// 2.0会重新设计
-	isLoggingIn := status.ServerConnectedCoordinatorAndLoggingIn.ToInt() == retGram.Code
+	isLoggingIn := status.ServerConnectedCoordinatorAndLoggingIn.ToInt() == statusCode
 	if isLoggingIn {
-		if retGram.Role == "server" || retGram.Role == "coordinator" {
+		if role == "server" || role == "coordinator" {
 			actor = &Actor{
-				role:     retGram.Role,
+				role:     role,
 				conn:     conn,
 				identity: make(map[string]interface{}),
 				io: struct {
@@ -98,69 +105,96 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 				}{input: make(chan []byte), output: make(chan []byte)},
 			}
 		}
-		switch retGram.Role {
+		switch role {
 		case "cli":
-			whatToDo := retGram.Detail["command"].(string)
-			serverID := uint(retGram.Detail["server_id"].(float64))
+			whatToDo := detail["command"].(string)
+			serverID := uint(detail["server_id"].(float64))
 			thisActor := hub.actors[serverID]
 			if thisActor == nil {
-				detail := make(map[string]interface{})
-				detail["server_id"] = serverID
-				ret := status.CoordinatorServerOffline.WriteDetail(detail)
-				log.Info(ret)
-				conn.WriteMessage(websocket.TextMessage, []byte(ret))
+				log.Info(status.CoordinatorServerOffline.WriteDetail(""))
 				conn.Close()
 				return
 			}
-			retGram.Code = status.CLISendingCommand.ToInt()
-			retGram.Message = status.CLISendingCommand.Message()
-			msg, _ := json.Marshal(&retGram)
 			thisActor.io.input <- msg
 			switch whatToDo {
 			case "attach":
-				log.Info(fmt.Sprintf("Attaching server \"%v\"", serverID))
-				go func() {
-					for {
-						_, input, err := conn.ReadMessage()
-						if err != nil {
-							retGram.Role = Role
-							retGram.Code = status.ServerTerminateAttachConsole.ToInt()
-							retGram.Message = status.ServerTerminateAttachConsole.Message()
-							thisActor.conn.WriteJSON(&retGram)
-							fmt.Println(retGram)
-							conn.Close()
-							return
-						}
-						thisActor.io.input <- input
+				// If we are now attaching the server session
+				// What we need to do is: retrieve the output message
+				// and send to the CLI's console
+				for {
+					_, input, err := conn.ReadMessage()
+					if err != nil {
+						data["role"] = "coordinator"
+						data["code"] = status.ServerTerminateAttachConsole
+						data["message"] = status.ServerTerminateAttachConsole.Message()
+						detail["server_id"] = thisActor.identity["server_id"]
+						data["detail"] = detail
+						msg, _ := json.Marshal(data)
+						thisActor.io.input <- msg
+						return
 					}
-				}()
+					thisActor.io.input <- input
+
+					output := <-thisActor.io.output
+					conn.WriteMessage(websocket.TextMessage, output)
+				}
 			default:
 				conn.Close()
 				return
 			}
+		case "coordinator":
+			return
 		case "server":
 			// Forcely close repeated connection...
-			serverID := uint(retGram.Detail["server_id"].(float64))
+			serverID := uint(detail["server_id"].(float64))
 			hasActor := hub.actors[serverID]
 			if hasActor != nil {
-				conn.WriteMessage(websocket.TextMessage, []byte(status.CoordinatorServerAlreadyExist.WriteDetail(retGram.Detail)))
+				conn.WriteMessage(websocket.TextMessage, []byte(status.CoordinatorServerAlreadyExist.WriteDetail("")))
 				return
 			}
 			actor.identity["server_id"] = serverID
-			actor.identity["status"] = status.ServerConnectedCoordinatorAndLoggingIn.ToInt()
-		case "coordinator":
-			return
 		default:
-			log.Error(fmt.Sprintf("Terminating this connection due to the unknown role: %v", retGram.Role))
+			log.Error(fmt.Sprintf("Terminating this connection due to the unknown role: %v", role))
 			conn.Close()
 			return
 		}
-		hub.register <- actor
-		log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
+		for k := range data {
+			delete(data, k)
+		}
+
+		data["role"] = "coordinator"
+		data["code"] = status.OK
+		data["message"] = status.OK.Message()
+		actor.conn.WriteJSON(&data)
+
+		for k := range data {
+			delete(data, k)
+		}
+		err := actor.conn.ReadJSON(&data)
+		if err != nil {
+			log.Error(err)
+			return
+		}
+		responseStatus := int(data["code"].(float64))
+		if responseStatus == status.OK.ToInt() {
+			detail = data["detail"].(map[string]interface{})
+			if serverID := uint(detail["server_id"].(float64)); serverID != actor.identity["server_id"].(uint) {
+				// This should not happen.
+				return
+			}
+			hub.register <- actor
+			log.Info(fmt.Sprintf("Actor: %v (%v) connected.", actor.identity["server_id"], actor.role))
+		} else {
+			fmt.Println("Aborting this connection since the message received is incorrect. IP:", actor.conn.RemoteAddr().String())
+			fmt.Println("Message:", data)
+			hub.unregister <- actor
+			return
+		}
 		go actor.read()
 		go actor.write()
 	} else {
-		conn.Close()
+		// Unknown.
+		// Terminate this connection
 		return
 	}
 }
@@ -173,10 +207,8 @@ func (h *Hub) run() {
 			h.actors[serverID] = actor
 		case actor := <-h.unregister:
 			serverID := actor.identity["server_id"].(uint)
-			role := actor.role
 			actor.conn.Close()
 			delete(h.actors, serverID)
-			log.Info(fmt.Sprintf("Actor: %v (%v) disconnected.", serverID, role))
 		}
 	}
 }
@@ -191,6 +223,9 @@ func (actor *Actor) read() {
 	for {
 		_, msg, err := actor.conn.ReadMessage()
 		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Error(err)
+			}
 			break
 		}
 		msg = bytes.TrimSpace(bytes.ReplaceAll(msg, []byte{'\n'}, []byte{' '}))
