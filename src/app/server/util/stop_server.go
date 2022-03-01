@@ -25,14 +25,12 @@ func ForceStopServer(cfg *conf.Config) {
 	}
 	switch cfg.Server.Game {
 	case "cs1.6", "csgo":
-		fmt.Println(entity.Proc.MainWindowHandle)
 		windows.SendToConsole(entity.Proc.MainWindowHandle, "quit")
 	default:
 		panic("You should not be there.")
 	}
 	count := 0
 	for entity.Proc.EXE.ProcessState == nil {
-		fmt.Println("count:", count)
 		if count >= 5 {
 			entity.Proc.EXE.Process.Kill()
 			break

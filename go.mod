@@ -4,7 +4,7 @@ go 1.17
 
 require github.com/spf13/cobra v1.3.0
 
-require github.com/jpillora/backoff v1.0.0 // indirect
+require github.com/jpillora/backoff v1.0.0
 
 require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect

@@ -251,9 +251,9 @@ func (actor *Actor) write() {
 
 func main() {
 	shutil.ClearTerminalScreen()
-
 	cfg := cliconf.Init()
 	log.Init(cfg.Log)
+	log.Info("Coordinator initialized.")
 
 	go hub.run()
 	http.HandleFunc("/", wsHandle)

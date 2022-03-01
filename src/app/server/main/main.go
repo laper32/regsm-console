@@ -1,9 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"os/exec"
@@ -16,6 +16,7 @@ import (
 	"github.com/laper32/regsm-console/src/app/server/misc"
 	"github.com/laper32/regsm-console/src/app/server/util"
 	"github.com/laper32/regsm-console/src/lib/clientws"
+	"github.com/laper32/regsm-console/src/lib/container/queue"
 	"github.com/laper32/regsm-console/src/lib/log"
 	"github.com/laper32/regsm-console/src/lib/status"
 )
@@ -30,7 +31,7 @@ type RetGram struct {
 var (
 	retGram     *RetGram
 	thisCommand string
-	outPipe     io.ReadCloser
+	outputQueue *queue.Queue
 )
 
 func handleClientWSConnection(cfg *conf.Config) {
@@ -73,22 +74,7 @@ func handleClientWSConnection(cfg *conf.Config) {
 				detail := make(map[string]interface{})
 				switch command {
 				case "attach":
-					// The command sending interative should call "send"
-					// Additionally, perhaps we should use queue to ensure that
-					// the console is interactive.
-					go func() {
-						for {
-							data := make([]byte, 4096)
-							_, err = outPipe.Read(data)
-							fmt.Print(data)
-							if err != nil {
-								break
-							}
-							if retGram.Code == status.ServerTerminateAttachConsole.ToInt() {
-								break
-							}
-						}
-					}()
+					// go handleAttach(msg)
 					return
 				case "restart":
 					util.ForceStopServer(cfg)
@@ -211,12 +197,16 @@ func listenSignal(cfg *conf.Config) {
 	}
 }
 
-func main() {
-	cfg := conf.Init()
-	log.Init(cfg.Log)
-	handleClientWSConnection(cfg)
-	startServer(cfg)
-	listenSignal(cfg)
+func initQueue() {
+	outputQueue = queue.New()
+	// If message > 500, then pop
+	go func() {
+		for {
+			if outputQueue.Len() > 500 {
+				outputQueue.Dequeue()
+			}
+		}
+	}()
 }
 
 func startServer(cfg *conf.Config) {
@@ -249,7 +239,31 @@ func startServer(cfg *conf.Config) {
 			// attach是最难的部分，这部分做完了，应该就可以拿出来见人了。
 			// 剩下的都是小鱼小虾，好搞得很
 			o, _ := entity.Proc.EXE.StdoutPipe()
-			outPipe = o
+			go func() {
+				logPath := fmt.Sprintf("%v/log/server/%v/L%v.log", os.Getenv("GSM_ROOT"), os.Getenv("GSM_SERVER_ID"), time.Now().Format("20060102"))
+				f, err := os.OpenFile(logPath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+				if err != nil {
+					log.Panic(err)
+					return
+				}
+				defer f.Close()
+				for {
+					data := make([]byte, 4096)
+					_, err := o.Read(data)
+					// Noting that we need to write RAW message to ensure that everything is correct.
+
+					// Erasing all NUL character.
+					data = bytes.Trim(data, "\x00")
+					out := string(data)
+					f.WriteString(out)
+					// 将消息塞入队列中
+					// 只存储最近500条消息
+					outputQueue.Enqueue(out)
+					if err != nil {
+						break
+					}
+				}
+			}()
 			err := entity.Proc.Start()
 			if err != nil {
 				log.Error("Failed to startup the server.")
@@ -346,4 +360,26 @@ func performCountdown(cfg *conf.Config) {
 
 		time.Sleep(time.Second * time.Duration(cfg.Server.RestartAfterDelay))
 	}
+}
+
+func handleAttach(msg string) {
+	var retGram *RetGram
+	for {
+		err := json.Unmarshal([]byte(msg), &retGram)
+		if err == nil {
+			fmt.Println(retGram)
+			if retGram.Code == status.ServerTerminateAttachConsole.ToInt() {
+				break
+			}
+		}
+	}
+}
+
+func main() {
+	cfg := conf.Init()
+	log.Init(cfg.Log)
+	initQueue()
+	handleClientWSConnection(cfg)
+	startServer(cfg)
+	listenSignal(cfg)
 }

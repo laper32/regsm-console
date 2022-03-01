@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/laper32/regsm-console/src/lib/conf"
 	"github.com/laper32/regsm-console/src/lib/log"
@@ -79,8 +80,9 @@ func Init() *Config {
 	if err != nil {
 		panic(err)
 	}
+	logPath := fmt.Sprintf("%v/log/server/%v/L%v.log", os.Getenv("GSM_ROOT"), serverID, time.Now().Format("20060102"))
 	return &Config{
-		Log: &log.Config{},
+		Log: &log.Config{OutputPath: []string{"stdout", logPath}},
 		Server: &Server{
 			ID:              uint(serverID),
 			AllowUpdate:     cfg_server.GetBool("server.allow_update"),
