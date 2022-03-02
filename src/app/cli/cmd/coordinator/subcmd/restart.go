@@ -35,7 +35,7 @@ func InitRestartCMD() *cobra.Command {
 			conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
 			if err != nil {
 				fmt.Println()
-				log.Warn("Seems that the connection is closed. Message:", err)
+				log.Info("Seems that the connection is closed. Message:", err)
 				return
 			}
 			fmt.Println("OK")
@@ -58,22 +58,19 @@ func InitRestartCMD() *cobra.Command {
 				}
 			}
 			exedir := fmt.Sprintf("%v/gsm-coordinator.exe", os.Getenv("GSM_PATH"))
-			ok := make(chan bool)
-			go func() {
-				exe := &exec.Cmd{
-					Path: exedir,
-					Dir:  os.Getenv("GSM_PATH"),
-					Env:  os.Environ(),
-				}
-				err = exe.Start()
-				if err != nil {
-					log.Panic(err)
-					return
-				}
-				log.Info("Coordinator started. Process ID:", exe.Process.Pid)
-				ok <- true
-			}()
-			<-ok
+			exe := &exec.Cmd{
+				Path: exedir,
+				Dir:  os.Getenv("GSM_PATH"),
+				Env:  os.Environ(),
+			}
+			err = exe.Start()
+			if err != nil {
+				log.Panic(err)
+				return
+			}
+			log.Info("Coordinator started. PID:", exe.Process.Pid)
+			exe.Process.Release()
+			log.Info("Restarting completed.")
 		},
 	}
 	return restart
