@@ -249,7 +249,7 @@ func startServer(cfg *conf.Config) {
 			entity.Proc.EXE = &exec.Cmd{
 				Path:  fmt.Sprintf("%v/%v", exeDir, exeName),
 				Dir:   exeDir,
-				Args:  cfg.Server.Args,
+				Args:  append([]string{fmt.Sprintf("%v/%v", exeDir, exeName)}, cfg.Server.Args...),
 				Env:   os.Environ(),
 				Stdin: os.Stdin, // need to redirect stdin to ensure that we can truly write it to the console.
 			}
@@ -390,19 +390,6 @@ func performCountdown(cfg *conf.Config) {
 		entity.Conn.SendTextMessage(string(msg))
 
 		time.Sleep(time.Second * time.Duration(cfg.Server.RestartAfterDelay))
-	}
-}
-
-func handleAttach(msg string) {
-	var retGram *RetGram
-	for {
-		err := json.Unmarshal([]byte(msg), &retGram)
-		if err == nil {
-			fmt.Println(retGram)
-			if retGram.Code == status.ServerTerminateAttachConsole.ToInt() {
-				break
-			}
-		}
 	}
 }
 

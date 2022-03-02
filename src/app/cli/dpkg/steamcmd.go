@@ -123,7 +123,7 @@ func windowsCheckLatestBuild(appID int64) int64 {
 	exePath := fmt.Sprintf("%s/steamcmd/steamcmd.exe", binDirectory)
 	exe := &exec.Cmd{
 		Path: exePath,
-		Args: []string{"+login anonymous", "+app_info_update 1", fmt.Sprintf("+app_info_print %v", appID), "+quit"},
+		Args: []string{exePath, "+login anonymous", "+app_info_update 1", fmt.Sprintf("+app_info_print %v", appID), "+quit"},
 	}
 	// https://stackoverflow.com/questions/1877045/how-do-you-get-the-output-of-a-system-command-in-go
 	out, err := exe.Output()

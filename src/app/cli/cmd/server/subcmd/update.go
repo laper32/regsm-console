@@ -51,6 +51,18 @@ func InitUpdateCMD() *cobra.Command {
 				thisLogDirectory := fmt.Sprintf("%v/log/server/%v", rootDirectory, serverID)
 				return thisServerDirectory, thisConfigDirectory, thisLogDirectory
 			}
+			serverDirectory, configDirectory, _ := makeDirectory(serverID)
+
+			cfggame := conf.Load(&conf.Config{
+				Name: "config",
+				Type: "toml",
+				Path: []string{configDirectory},
+			})
+			allowUpdate := cfggame.GetBool("server.allow_update")
+			if !allowUpdate {
+				fmt.Println("This server does not allow update.")
+				return
+			}
 
 			startUpdate := func(serverDirectory string) {
 				gameData := dpkg.FindGame(thisServer.Game)
@@ -99,19 +111,6 @@ func InitUpdateCMD() *cobra.Command {
 			}
 
 			execute := func(serverID uint) {
-				serverDirectory, configDirectory, _ := makeDirectory(serverID)
-
-				cfg := conf.Load(&conf.Config{
-					Name: "config",
-					Type: "toml",
-					Path: []string{configDirectory},
-				})
-				allowUpdate := cfg.GetBool("server.allow_update")
-				if !allowUpdate {
-					fmt.Println("This server does not allow update.")
-					return
-				}
-
 				startUpdate(serverDirectory)
 			}
 			furtherActionNeeded := func() bool {
@@ -127,7 +126,85 @@ func InitUpdateCMD() *cobra.Command {
 			if !misc.Agree && misc.Decline {
 				return
 			}
+			if furtherActionNeeded() {
+				fmt.Println("Noting that updating server means that you may have to stop multiple servers.")
+				fmt.Println("Make sure that you have known all possible consequences.")
+				confirm := interact.MakeConfirmation("Proceed?")
+				if !confirm {
+					return
+				}
+			}
+			// Noting that when updating server, all relavent server are required to shutdown
+			// to update
+			// especially you are running symlink
+			chain := dpkg.GetServerChainByID(serverID)
 			url := url.URL{Scheme: "ws", Host: fmt.Sprintf("%v:%v", cfg.GetString("coordinator.ip"), cfg.GetUint("coordinator.port"))}
+
+			stopServer := func(v uint) {
+				conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+				if err != nil {
+					log.Error(err)
+					return
+				}
+				retGram := &RetGram{
+					Role:    misc.Role,
+					Code:    status.ServerConnectedCoordinatorAndLoggingIn.ToInt(),
+					Message: status.ServerConnectedCoordinatorAndLoggingIn.Message(),
+					Detail:  map[string]interface{}{"server_id": v, "command": "update"},
+				}
+				err = conn.WriteJSON(&retGram)
+				if err != nil {
+					return
+				}
+				err = conn.ReadJSON(&retGram)
+				if err != nil {
+					return
+				}
+				conn.Close()
+			}
+			isStopped := func(v uint) error {
+				conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+				if err != nil {
+					log.Error(err)
+					return err
+				}
+				retGram := &RetGram{
+					Role:    misc.Role,
+					Code:    status.ServerConnectedCoordinatorAndLoggingIn.ToInt(),
+					Message: status.ServerConnectedCoordinatorAndLoggingIn.Message(),
+					Detail:  map[string]interface{}{"server_id": v, "command": "update"},
+				}
+				err = conn.WriteJSON(&retGram)
+				if err != nil {
+					return err
+				}
+				err = conn.ReadJSON(&retGram)
+				if err != nil {
+					return err
+				}
+				if retGram.Code == status.CoordinatorServerOffline.ToInt() {
+					return nil
+				} else {
+					// 有毛病吧 大小写还要你管了？
+					return fmt.Errorf("re-send command required")
+				}
+			}
+
+			for _, v := range chain {
+				stopServer(v)
+			}
+
+			for _, v := range chain {
+				for {
+					err := isStopped(v)
+					if err == nil {
+						break
+					} else {
+						stopServer(v)
+					}
+				}
+			}
+
 			// When this server is related to another server, all config field
 			// about updating are all disabled.
 			if thisServer.SymlinkServerID > 0 {
@@ -141,68 +218,10 @@ func InitUpdateCMD() *cobra.Command {
 					fmt.Println("Root server has been deleted.")
 					return
 				}
-				if furtherActionNeeded() {
-					fmt.Println("Noting that updating server means that you may have to stop multiple servers.")
-					fmt.Println("Make sure that you have known all possible consequences.")
-					confirm := interact.MakeConfirmation("Proceed?")
-					if !confirm {
-						return
-					}
-				}
-				chain := dpkg.GetServerChainByID(serverID)
 
-				for v := range chain {
-					retGram := &RetGram{
-						Role:    misc.Role,
-						Code:    status.ServerConnectedCoordinatorAndLoggingIn.ToInt(),
-						Message: status.ServerConnectedCoordinatorAndLoggingIn.Message(),
-						Detail: map[string]interface{}{
-							"server_id": v,
-							"command":   "update",
-						},
-					}
-					conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
-					if err != nil {
-						fmt.Println()
-						log.Error(err)
-						return
-					}
-					fmt.Println("OK")
-					defer func() {
-						conn.ReadJSON(&retGram)
-						fmt.Println(retGram)
-						conn.Close()
-					}()
-					err = conn.WriteJSON(&retGram)
-					if err != nil {
-						fmt.Println()
-						log.Error(err)
-						return
-					}
-				}
-
-				// for _, v := range dpkg.GetServerChainByID(serverID) {
-				// 	retGram := &RetGram{
-				// 		Role:    "cli",
-				// 		Code:    status.CLIUpdateSignal.ToInt(),
-				// 		Message: status.CLIUpdateSignal.Message(),
-				// 		Detail:  map[string]interface{}{"server_id": v},
-				// 	}
-
-				// }
-
-				debug := true
-				if !debug {
-
-					execute(rootServer.ID)
-
-				}
+				execute(rootServer.ID)
 			} else {
-				debug := true
-				if !debug {
-
-					execute(thisServer.ID)
-				}
+				execute(thisServer.ID)
 			}
 		},
 	}
