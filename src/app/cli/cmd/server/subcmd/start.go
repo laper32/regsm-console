@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 
-	"github.com/laper32/regsm-console/src/app/cli/cmd/server/subcmd/sysprocattr"
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
+	"github.com/laper32/regsm-console/src/lib/log"
 	"github.com/spf13/cobra"
 )
 
@@ -50,42 +50,18 @@ func InitStartCMD() *cobra.Command {
 				panic("Not supported OS.")
 			}
 			exe := &exec.Cmd{
-				Path:        path,
-				Dir:         os.Getenv("GSM_PATH"),
-				SysProcAttr: sysprocattr.SysProcAttr(),
-				Env:         os.Environ(),
-				Stdout:      os.Stdout,
-				Stderr:      os.Stderr,
+				Path:  path,
+				Dir:   os.Getenv("GSM_PATH"),
+				Env:   os.Environ(),
+				Stdin: os.Stdin,
 			}
 			err := exe.Start()
 			if err != nil {
-				fmt.Println(err)
+				log.Panic(err)
 				return
 			}
-			fmt.Println("Server started. Daemon PID:", exe.Process.Pid)
-			os.Exit(0)
-
-			// // That's why we want to build a coordinator....
-			// // We need a method to see all information...
-			// start := make(chan bool)
-			// go func() {
-			// 	wrapperEXE := &exec.Cmd{
-			// 		Path:        wrapperEXEPath,
-			// 		Dir:         os.Getenv("GSM_ROOT") + "/bin",
-			// 		Args:        []string{wrapperEXEPath, string(ret)},
-			// 		SysProcAttr: sysprocattr.SysProcAttr(),
-			// 	}
-			// 	// TODO: Notify the server that this server is starting.
-			// 	err = wrapperEXE.Start()
-			// 	if err != nil {
-			// 		fmt.Println("ERROR:", err)
-			// 		start <- false
-			// 		return
-			// 	}
-			// 	start <- true
-			// }()
-			// // <-start
-
+			log.Info("Server started. Daemon PID:", exe.Process.Pid)
+			exe.Process.Release()
 		},
 	}
 	start.Flags().UintVar(&serverID, "server-id", 0, "Server ID to start")

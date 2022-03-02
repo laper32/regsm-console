@@ -19,6 +19,7 @@ import (
 	"github.com/laper32/regsm-console/src/lib/container/queue"
 	"github.com/laper32/regsm-console/src/lib/log"
 	"github.com/laper32/regsm-console/src/lib/status"
+	"github.com/laper32/regsm-console/src/lib/sys/windows"
 )
 
 type RetGram struct {
@@ -253,6 +254,7 @@ func startServer(cfg *conf.Config) {
 				Env:   os.Environ(),
 				Stdin: os.Stdin, // need to redirect stdin to ensure that we can truly write it to the console.
 			}
+
 			entity.Proc.EXE.Stderr = entity.Proc.EXE.Stdout
 			// stdout导出到两个地方
 			// 1. 日志文件
@@ -282,7 +284,6 @@ func startServer(cfg *conf.Config) {
 					data := make([]byte, 4096)
 					_, err := o.Read(data)
 					// Noting that we need to write RAW message to ensure that everything is correct.
-
 					// Erasing all NUL character.
 					data = bytes.Trim(data, "\x00")
 					out := string(data)
@@ -316,8 +317,8 @@ func startServer(cfg *conf.Config) {
 				continue
 			}
 			count = 0
-			// time.Sleep(200 * time.Millisecond)
-			// windows.ShowWindow(entity.Proc.MainWindowHandle, windows.SW_HIDE)
+			time.Sleep(200 * time.Millisecond)
+			windows.ShowWindow(entity.Proc.MainWindowHandle, windows.SW_HIDE)
 			detail["server_id"] = cfg.Server.ID
 			detail["server_pid"] = entity.Proc.EXE.Process.Pid
 			detail["daemon_pid"] = os.Getpid()

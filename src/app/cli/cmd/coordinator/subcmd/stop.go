@@ -56,44 +56,19 @@ func InitStopCMD() *cobra.Command {
 				return
 			}
 			fmt.Println("OK")
-
-			detail := make(map[string]interface{})
-			message := make(map[string]interface{})
-			message["role"] = misc.Role
-			// 设计失误
-			// 连接红蓝字应该是全局的 但我当时没考虑到
-			// 2.0会重新设计
-			message["code"] = status.CLICoordinatorSendStopSignal
-			message["message"] = status.CLICoordinatorSendStopSignal.Message()
-			message["detail"] = detail
-
+			retGram := &RetGram{
+				Role:    misc.Role,
+				Code:    status.CLICoordinatorSendStopSignal.ToInt(),
+				Message: status.CLICoordinatorSendStopSignal.Message(),
+				Detail:  map[string]interface{}{},
+			}
 			defer conn.Close()
-			fmt.Printf("Sending message...")
-			err = conn.WriteJSON(&message)
+			log.Info("Sending stopping command")
+			err = conn.WriteJSON(&retGram)
 			if err != nil {
-				fmt.Println()
-				log.Warn("There are some issues on sending message to the coordinator. Message:", err)
+				log.Info(err)
 				return
 			}
-			fmt.Println("OK")
-			/*
-				conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
-				if err != nil {
-					fmt.Println()
-					log.Error(err)
-					return
-				}
-				fmt.Println("OK")
-				defer conn.Close()
-				fmt.Printf("Sending message...")
-				err = conn.WriteJSON(&message)
-				if err != nil {
-					fmt.Println()
-					log.Error(err)
-					return
-				}
-				fmt.Println("OK")
-			*/
 		},
 	}
 	// stop.Flags().StringVar(&recursive, "recursive", "none", "Recursively stopping servers.")
