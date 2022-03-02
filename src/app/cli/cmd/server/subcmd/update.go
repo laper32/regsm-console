@@ -2,16 +2,22 @@ package subcmd
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
+	"github.com/gorilla/websocket"
+	cliconf "github.com/laper32/regsm-console/src/app/cli/conf"
 	"github.com/laper32/regsm-console/src/app/cli/dpkg"
+	"github.com/laper32/regsm-console/src/app/cli/misc"
 	"github.com/laper32/regsm-console/src/lib/conf"
+	"github.com/laper32/regsm-console/src/lib/interact"
+	"github.com/laper32/regsm-console/src/lib/log"
+	"github.com/laper32/regsm-console/src/lib/status"
 	"github.com/spf13/cobra"
 )
 
 func InitUpdateCMD() *cobra.Command {
 	var serverID uint
-	var confirm bool
 	update := &cobra.Command{
 		Use: "update",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -24,6 +30,17 @@ func InitUpdateCMD() *cobra.Command {
 			thisServer := dpkg.FindIdentifiedServer(serverID)
 			if thisServer == nil {
 				fmt.Printf("ERROR: Cannot found server %v.\n", serverID)
+				return
+			}
+
+			if thisServer.Deleted {
+				fmt.Printf("Server has been deleted.\n")
+				return
+			}
+
+			cfg, err := cliconf.CoordinatorConfiguration()
+			if err != nil {
+				log.Error(err)
 				return
 			}
 
@@ -97,7 +114,20 @@ func InitUpdateCMD() *cobra.Command {
 
 				startUpdate(serverDirectory)
 			}
+			furtherActionNeeded := func() bool {
+				if misc.Agree && !misc.Decline {
+					return false
+				} else if !misc.Agree && misc.Decline {
+					return false
+				} else {
+					return true
+				}
+			}
 
+			if !misc.Agree && misc.Decline {
+				return
+			}
+			url := url.URL{Scheme: "ws", Host: fmt.Sprintf("%v:%v", cfg.GetString("coordinator.ip"), cfg.GetUint("coordinator.port"))}
 			// When this server is related to another server, all config field
 			// about updating are all disabled.
 			if thisServer.SymlinkServerID > 0 {
@@ -111,18 +141,73 @@ func InitUpdateCMD() *cobra.Command {
 					fmt.Println("Root server has been deleted.")
 					return
 				}
-				execute(rootServer.ID)
+				if furtherActionNeeded() {
+					fmt.Println("Noting that updating server means that you may have to stop multiple servers.")
+					fmt.Println("Make sure that you have known all possible consequences.")
+					confirm := interact.MakeConfirmation("Proceed?")
+					if !confirm {
+						return
+					}
+				}
+				chain := dpkg.GetServerChainByID(serverID)
 
+				for v := range chain {
+					retGram := &RetGram{
+						Role:    misc.Role,
+						Code:    status.ServerConnectedCoordinatorAndLoggingIn.ToInt(),
+						Message: status.ServerConnectedCoordinatorAndLoggingIn.Message(),
+						Detail: map[string]interface{}{
+							"server_id": v,
+							"command":   "update",
+						},
+					}
+					conn, _, err := websocket.DefaultDialer.Dial(url.String(), nil)
+					if err != nil {
+						fmt.Println()
+						log.Error(err)
+						return
+					}
+					fmt.Println("OK")
+					defer func() {
+						conn.ReadJSON(&retGram)
+						fmt.Println(retGram)
+						conn.Close()
+					}()
+					err = conn.WriteJSON(&retGram)
+					if err != nil {
+						fmt.Println()
+						log.Error(err)
+						return
+					}
+				}
+
+				// for _, v := range dpkg.GetServerChainByID(serverID) {
+				// 	retGram := &RetGram{
+				// 		Role:    "cli",
+				// 		Code:    status.CLIUpdateSignal.ToInt(),
+				// 		Message: status.CLIUpdateSignal.Message(),
+				// 		Detail:  map[string]interface{}{"server_id": v},
+				// 	}
+
+				// }
+
+				debug := true
+				if !debug {
+
+					execute(rootServer.ID)
+
+				}
 			} else {
-				execute(thisServer.ID)
+				debug := true
+				if !debug {
+
+					execute(thisServer.ID)
+				}
 			}
 		},
 	}
 	update.Flags().UintVar(&serverID, "server-id", 0, "")
 	update.MarkFlagRequired("server-id")
-
-	update.Flags().BoolVarP(&confirm, "yes", "y", false, "")
-	update.Flags().MarkHidden("yes")
 
 	return update
 }

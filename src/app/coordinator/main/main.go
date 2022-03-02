@@ -118,24 +118,12 @@ func wsHandle(w http.ResponseWriter, r *http.Request) {
 			thisActor.io.input <- msg
 			switch whatToDo {
 			case "attach":
-				log.Info(fmt.Sprintf("Attaching server \"%v\"", serverID))
-				go func() {
-					for {
-						_, input, err := conn.ReadMessage()
-						if err != nil {
-							retGram.Role = Role
-							retGram.Code = status.ServerTerminateAttachConsole.ToInt()
-							retGram.Message = status.ServerTerminateAttachConsole.Message()
-							thisActor.conn.WriteJSON(&retGram)
-							fmt.Println(retGram)
-							conn.Close()
-							return
-						}
-						thisActor.io.input <- input
-					}
-				}()
+			case "update":
+				msg := <-thisActor.io.output
+				conn.WriteMessage(websocket.TextMessage, msg)
 			default:
 				conn.Close()
+				//conn.WriteMessage(websocket.TextMessage, <-thisActor.io.output)
 				return
 			}
 		case "server":

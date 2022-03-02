@@ -3,6 +3,7 @@
 package clientws
 
 import (
+	"encoding/json"
 	"errors"
 	"math/rand"
 	"net/http"
@@ -262,6 +263,17 @@ func (wsc *ClientWebSocket) SendTextMessage(message string) error {
 		return ErrBuffer
 	}
 	return nil
+}
+
+func (wsc *ClientWebSocket) SendJSON(v interface{}) error {
+	if wsc.Closed() {
+		return ErrClose
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	return wsc.SendTextMessage(string(data))
 }
 
 // 发送BinaryMessage消息

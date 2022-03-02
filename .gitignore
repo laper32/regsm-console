@@ -11,6 +11,8 @@ distribute/
 
 *.swp
 
+build*
+
 # temp ignore
 *.log
 *.cache

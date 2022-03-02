@@ -132,8 +132,39 @@ func handleClientWSConnection(cfg *conf.Config) {
 					os.Exit(0)
 				case "update":
 					// TODO: In the future can be done via only daemon.
-					thisCommand = ""
-					return
+					if entity.Proc.EXE.ProcessState != nil {
+						log.Info("Server is terminated. Stop the daemon.")
+
+						detail["server_id"] = cfg.Server.ID
+						retGram.Code = status.ServerExited.ToInt()
+						retGram.Message = status.ServerExited.Message()
+						retGram.Detail = detail
+						msg, _ := json.Marshal(&retGram)
+						err = entity.Conn.SendTextMessage(string(msg))
+						if err != nil {
+							log.Warn(err)
+						}
+						os.Exit(0)
+					}
+					detail := make(map[string]interface{})
+					detail["server_id"] = cfg.Server.ID
+					retGram.Code = status.ServerStopping.ToInt()
+					retGram.Message = status.ServerStopping.Message()
+					retGram.Detail = detail
+					msg, _ := json.Marshal(&retGram)
+					err := entity.Conn.SendTextMessage(string(msg))
+					if err != nil {
+						log.Warn(err)
+					}
+					util.ForceStopServer(cfg)
+					retGram.Code = status.ServerExited.ToInt()
+					retGram.Message = status.ServerExited.Message()
+					msg, _ = json.Marshal(&retGram)
+					err = entity.Conn.SendTextMessage(string(msg))
+					if err != nil {
+						log.Warn(err)
+					}
+					os.Exit(0)
 				case "start", "backup", "install", "remove", "search", "validate":
 					log.Warn(fmt.Sprintf("Invalid command \"%v\"", command))
 					thisCommand = ""

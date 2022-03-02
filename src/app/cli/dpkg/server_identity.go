@@ -6,7 +6,6 @@ import (
 	"os"
 
 	libconf "github.com/laper32/regsm-console/src/lib/conf"
-	"github.com/laper32/regsm-console/src/lib/status"
 	"github.com/laper32/regsm-console/src/lib/structs"
 	"github.com/spf13/viper"
 )
@@ -22,6 +21,7 @@ var (
 	ServerIdentityList   []ServerIdentity
 	ServerIdentityConfig *viper.Viper
 	ServerIdentityMap    []map[string]interface{}
+	serverIdentityTable  map[uint][]uint = make(map[uint][]uint)
 )
 
 func InitServerIdentity() {
@@ -47,6 +47,53 @@ func InitServerIdentity() {
 		this.SymlinkServerID = uint(content["m_nSymlinkServerID"].(float64))
 		ServerIdentityList = append(ServerIdentityList, this)
 	}
+
+	createIdentityTable()
+}
+
+func element_exist(val uint, arr []uint) bool {
+	for _, v := range arr {
+		if v == val {
+			return true
+		}
+	}
+	return false
+}
+
+func GetServerChainByID(serverID uint) []uint {
+	// search root
+	if value, ok := serverIdentityTable[serverID]; ok {
+		return append([]uint{serverID}, value...)
+	}
+
+	// walking through table
+	for k, v := range serverIdentityTable {
+		if element_exist(serverID, v) {
+			return append([]uint{k}, v...)
+		}
+	}
+
+	return nil
+}
+func createIdentityTable() {
+	for _, v := range ServerIdentityList {
+		if v.SymlinkServerID == 0 {
+			serverIdentityTable[v.ID] = make([]uint, 0)
+			continue
+		}
+		if value, ok := serverIdentityTable[v.SymlinkServerID]; ok {
+			if !element_exist(v.ID, value) {
+				serverIdentityTable[v.SymlinkServerID] = append(value, v.ID)
+			}
+		} else {
+			sv := FindRootSymlinkServer(v.ID)
+			if value, ok := serverIdentityTable[sv.ID]; ok {
+				if !element_exist(v.ID, value) {
+					serverIdentityTable[sv.ID] = append(value, v.ID)
+				}
+			}
+		}
+	}
 }
 
 func FindIdentifiedServer(serverID uint) *ServerIdentity {
@@ -69,21 +116,29 @@ func UpdateServerIdentity() {
 }
 
 // Working around to solve recursive referencing issue.
-var __builtin_current_id uint = 0
-var __builtin_symlink_id uint = 0
+var (
+	__builtin_last_symlink_id uint = 0
+)
 
+// server ID | symlink Server ID
+// 		8			7
+// 		7			8
+//  passing this server ID, then we check the last symlink id
+// then we can found the recursive referencing.
 func FindRootSymlinkServer(serverID uint) *ServerIdentity {
-	// Working around to solve recursive referencing issue.
-	if __builtin_current_id == serverID {
-		panic(status.CLIInstallSymlinkServerIDFoundRecursiveReferencing.WriteDetail(fmt.Sprintf("Recursive server ID: {%v, %v}", __builtin_current_id, __builtin_symlink_id)))
+	if __builtin_last_symlink_id == serverID {
+		panic(fmt.Sprintf("recursive server found: %v and %v", __builtin_last_symlink_id, serverID))
 	}
-	for _, this := range ServerIdentityList {
-		if this.SymlinkServerID != 0 {
-			__builtin_current_id = this.ID
-			__builtin_symlink_id = this.SymlinkServerID
-			return FindRootSymlinkServer(this.ID)
+	sv := FindIdentifiedServer(serverID)
+	for _, v := range ServerIdentityList {
+		if v.ID != sv.SymlinkServerID {
+			continue
+		}
+		if v.SymlinkServerID != 0 {
+			__builtin_last_symlink_id = v.SymlinkServerID
+			return FindRootSymlinkServer(v.ID)
 		} else {
-			return &this
+			return &v
 		}
 	}
 	return nil

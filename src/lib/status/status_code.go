@@ -59,6 +59,7 @@ var (
 
 	// 9000~9999: gsm server update
 	CLIUpdateUnableToUpdateServer = New(9000, "Failed to update the server")
+	CLIUpdateSignal               = New(9001, "Update signal")
 
 	// 10000~10999: gsm server validate
 	CLIValidateUnableToValidateServer = New(10000, "Unable to validate the server")
